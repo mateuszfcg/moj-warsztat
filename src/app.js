@@ -91,6 +91,15 @@ function authRequired(req, res, next) {
   next();
 }
 
+function ownerRequired(req, res, next) {
+  if (!req.session.user) return res.redirect(appUrl('/login'));
+  if (req.session.user.role !== 'owner') {
+    setFlash(req, 'error', 'Tylko właściciel może zarządzać użytkownikami.');
+    return res.redirect(appUrl('/settings'));
+  }
+  next();
+}
+
 function csrfMiddleware(req, res, next) {
   if (!req.session.csrfToken) req.session.csrfToken = crypto.randomBytes(24).toString('hex');
   res.locals.csrfToken = req.session.csrfToken;
@@ -118,6 +127,7 @@ app.use((req, res, next) => {
   res.locals.lineTotals = lineTotals;
   res.locals.orderStatuses = { draft: 'Nowe zlecenie', estimate: 'Wycena', approved: 'Zaakceptowane', accepted: 'Zaakceptowane', in_progress: 'W trakcie naprawy', ready: 'Gotowy do odbioru', completed: 'Zakończone', cancelled: 'Anulowane' };
   res.locals.taskStatuses = { todo: 'Do zrobienia', in_progress: 'W trakcie', done: 'Zakończone' };
+  res.locals.userRoles = { owner: 'Właściciel', manager: 'Kierownik', advisor: 'Doradca serwisowy', mechanic: 'Mechanik', accounting: 'Księgowość' };
   res.locals.label = label;
   res.locals.formatDate = (value) => value ? new Date(`${value}`.length === 10 ? `${value}T12:00:00` : value).toLocaleDateString('pl-PL') : '—';
   delete req.session.flash;
@@ -155,12 +165,13 @@ app.get('/login', (req, res) => {
 
 app.post('/login', (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase();
-  const user = db.prepare('SELECT * FROM users WHERE email=?').get(email);
+  const user = db.prepare('SELECT * FROM users WHERE email=? AND is_active=1').get(email);
   if (!user || !bcrypt.compareSync(String(req.body.password || ''), user.password_hash)) {
     setFlash(req, 'error', 'Nieprawidłowy e-mail lub hasło.');
     return res.redirect(appUrl('/login'));
   }
   req.session.user = { id: user.id, email: user.email, name: user.name, role: user.role };
+  db.prepare('UPDATE users SET last_login_at=CURRENT_TIMESTAMP WHERE id=?').run(user.id);
   audit(user.id, 'login', 'user', user.id);
   res.redirect(appUrl('/'));
 });
@@ -693,7 +704,7 @@ app.get('/tasks', authRequired, (req, res) => {
   sql += ` ORDER BY CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END,
     COALESCE(t.planned_date,'9999-12-31'),t.id DESC`;
   const tasks = db.prepare(sql).all(...params);
-  const users = db.prepare('SELECT id,name FROM users ORDER BY name').all();
+  const users = db.prepare('SELECT id,name FROM users WHERE is_active=1 ORDER BY name').all();
   res.render('tasks/list', { title: 'Zadania', tasks, orders: openOrders(), users, status });
 });
 
@@ -980,6 +991,103 @@ app.post('/storage/:id/release', authRequired, (req, res) => {
 
 app.get('/settings', authRequired, (_req, res) => {
   res.render('settings/index', { title: 'Ustawienia' });
+});
+
+const USER_ROLES = ['owner','manager','advisor','mechanic','accounting'];
+
+function activeOwnerCount() {
+  return Number(db.prepare("SELECT COUNT(*) count FROM users WHERE role='owner' AND is_active=1").get().count || 0);
+}
+
+app.get('/settings/users', ownerRequired, (_req, res) => {
+  const users = db.prepare(`SELECT id,email,name,role,is_active,created_at,updated_at,last_login_at
+    FROM users ORDER BY is_active DESC, CASE role WHEN 'owner' THEN 0 ELSE 1 END, name COLLATE NOCASE`).all();
+  res.render('settings/users', { title: 'Użytkownicy', users });
+});
+
+app.post('/settings/users', ownerRequired, (req, res) => {
+  const name = String(req.body.name || '').trim();
+  const email = String(req.body.email || '').trim().toLowerCase();
+  const password = String(req.body.password || '');
+  const role = USER_ROLES.includes(req.body.role) ? req.body.role : 'mechanic';
+  if (!name || !/^\S+@\S+\.\S+$/.test(email)) {
+    setFlash(req, 'error', 'Podaj nazwę użytkownika i poprawny adres e-mail.');
+    return res.redirect(appUrl('/settings/users'));
+  }
+  if (password.length < 8) {
+    setFlash(req, 'error', 'Hasło musi mieć co najmniej 8 znaków.');
+    return res.redirect(appUrl('/settings/users'));
+  }
+  try {
+    const hash = bcrypt.hashSync(password, 12);
+    const result = db.prepare(`INSERT INTO users (email,password_hash,name,role,is_active,updated_at)
+      VALUES (?,?,?,?,1,CURRENT_TIMESTAMP)`).run(email, hash, name, role);
+    audit(req.session.user.id, 'create', 'user', result.lastInsertRowid, { email, name, role });
+    setFlash(req, 'success', 'Użytkownik został dodany.');
+  } catch (error) {
+    setFlash(req, 'error', String(error.message || '').includes('UNIQUE') ? 'Użytkownik z takim adresem e-mail już istnieje.' : error.message);
+  }
+  res.redirect(appUrl('/settings/users'));
+});
+
+app.post('/settings/users/:id', ownerRequired, (req, res) => {
+  const id = Number(req.params.id);
+  const user = db.prepare('SELECT * FROM users WHERE id=?').get(id);
+  if (!user) { setFlash(req, 'error', 'Nie znaleziono użytkownika.'); return res.redirect(appUrl('/settings/users')); }
+  const name = String(req.body.name || '').trim();
+  const email = String(req.body.email || '').trim().toLowerCase();
+  const role = USER_ROLES.includes(req.body.role) ? req.body.role : user.role;
+  if (!name || !/^\S+@\S+\.\S+$/.test(email)) {
+    setFlash(req, 'error', 'Podaj nazwę użytkownika i poprawny adres e-mail.');
+    return res.redirect(appUrl('/settings/users'));
+  }
+  if (user.role === 'owner' && role !== 'owner' && user.is_active && activeOwnerCount() <= 1) {
+    setFlash(req, 'error', 'Nie można zmienić roli ostatniego aktywnego właściciela.');
+    return res.redirect(appUrl('/settings/users'));
+  }
+  try {
+    db.prepare('UPDATE users SET name=?,email=?,role=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').run(name, email, role, id);
+    if (id === req.session.user.id) req.session.user = { ...req.session.user, name, email, role };
+    audit(req.session.user.id, 'update', 'user', id, { email, name, role });
+    setFlash(req, 'success', 'Dane użytkownika zostały zapisane.');
+  } catch (error) {
+    setFlash(req, 'error', String(error.message || '').includes('UNIQUE') ? 'Użytkownik z takim adresem e-mail już istnieje.' : error.message);
+  }
+  res.redirect(appUrl('/settings/users'));
+});
+
+app.post('/settings/users/:id/password', ownerRequired, (req, res) => {
+  const id = Number(req.params.id);
+  const user = db.prepare('SELECT id,email FROM users WHERE id=?').get(id);
+  const password = String(req.body.password || '');
+  if (!user) { setFlash(req, 'error', 'Nie znaleziono użytkownika.'); return res.redirect(appUrl('/settings/users')); }
+  if (password.length < 8) {
+    setFlash(req, 'error', 'Nowe hasło musi mieć co najmniej 8 znaków.');
+    return res.redirect(appUrl('/settings/users'));
+  }
+  db.prepare('UPDATE users SET password_hash=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').run(bcrypt.hashSync(password, 12), id);
+  audit(req.session.user.id, 'reset_password', 'user', id, { email: user.email });
+  setFlash(req, 'success', 'Hasło użytkownika zostało zmienione.');
+  res.redirect(appUrl('/settings/users'));
+});
+
+app.post('/settings/users/:id/toggle-active', ownerRequired, (req, res) => {
+  const id = Number(req.params.id);
+  const user = db.prepare('SELECT * FROM users WHERE id=?').get(id);
+  if (!user) { setFlash(req, 'error', 'Nie znaleziono użytkownika.'); return res.redirect(appUrl('/settings/users')); }
+  if (id === req.session.user.id) {
+    setFlash(req, 'error', 'Nie możesz zablokować własnego konta.');
+    return res.redirect(appUrl('/settings/users'));
+  }
+  const nextActive = user.is_active ? 0 : 1;
+  if (user.role === 'owner' && user.is_active && activeOwnerCount() <= 1) {
+    setFlash(req, 'error', 'Nie można zablokować ostatniego aktywnego właściciela.');
+    return res.redirect(appUrl('/settings/users'));
+  }
+  db.prepare('UPDATE users SET is_active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').run(nextActive, id);
+  audit(req.session.user.id, nextActive ? 'activate' : 'deactivate', 'user', id, { email: user.email });
+  setFlash(req, 'success', nextActive ? 'Konto użytkownika zostało odblokowane.' : 'Konto użytkownika zostało zablokowane.');
+  res.redirect(appUrl('/settings/users'));
 });
 
 app.get('/settings/workshop', authRequired, (_req, res) => {

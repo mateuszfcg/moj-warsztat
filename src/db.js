@@ -26,7 +26,10 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   name TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'owner',
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_login_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS clients (
@@ -336,6 +339,10 @@ function ensureColumn(table, name, definition) {
 }
 
 ensureColumn('work_orders', 'price_mode', "TEXT NOT NULL DEFAULT 'net'");
+ensureColumn('users', 'is_active', "INTEGER NOT NULL DEFAULT 1");
+ensureColumn('users', 'updated_at', "TEXT");
+db.exec("UPDATE users SET updated_at = COALESCE(updated_at, created_at, CURRENT_TIMESTAMP) WHERE updated_at IS NULL");
+ensureColumn('users', 'last_login_at', "TEXT");
 
 // Migracja starszych baz: od wersji 0.5.0 zlecenie może istnieć bez klienta i pojazdu.
 // SQLite nie potrafi usunąć ograniczenia NOT NULL prostym ALTER TABLE, dlatego przebudowujemy

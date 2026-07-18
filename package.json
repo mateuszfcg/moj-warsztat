@@ -1,6 +1,6 @@
 {
   "name": "moj-warsztat",
-  "version": "0.5.0",
+  "version": "0.5.2",
   "private": true,
   "description": "Self-hosted aplikacja do zarządzania warsztatem samochodowym: zlecenia, klienci, pojazdy, dokumenty, magazyn, terminarz, zadania i integracje.",
   "main": "src/server.js",

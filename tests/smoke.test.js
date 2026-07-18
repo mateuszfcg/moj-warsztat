@@ -34,7 +34,7 @@ test('health endpoint działa', async () => {
   assert.equal(response.body.ok, true);
   assert.equal(response.body.ksef, 'mock');
   assert.equal(response.body.app, 'Mój Warsztat');
-  assert.equal(response.body.version, '0.5.0');
+  assert.equal(response.body.version, '0.5.2');
 });
 
 test('pełny przepływ modalny: klient + pojazd + zlecenie + RBH + protokoły + faktura + KSeF + PDF', async () => {
@@ -212,6 +212,37 @@ test('wgrywanie logo działa z CSRF w multipart/form-data', async () => {
   await agent.post('/settings/documents/logo').field('_csrf', csrf).attach('logo', png, { filename: 'logo.png', contentType: 'image/png' }).expect(302);
   const row = db.prepare("SELECT value FROM app_settings WHERE key='document_logo_path'").get();
   assert.ok(row?.value);
+});
+
+
+test('właściciel może zarządzać użytkownikami w ustawieniach', async () => {
+  const agent = request.agent(app);
+  let csrf = await login(agent);
+  const page = await agent.get('/settings/users').expect(200);
+  csrf = csrfFrom(page.text);
+  assert.match(page.text, /Nowy użytkownik/);
+
+  await agent.post('/settings/users').type('form').send({
+    _csrf: csrf, name: 'Jan Mechanik', email: 'jan.mechanik@example.local', role: 'mechanic', password: 'Mechanik123!'
+  }).expect(302);
+  const worker = db.prepare("SELECT * FROM users WHERE email='jan.mechanik@example.local'").get();
+  assert.ok(worker);
+  assert.equal(worker.role, 'mechanic');
+  assert.equal(worker.is_active, 1);
+
+  await agent.post(`/settings/users/${worker.id}`).type('form').send({
+    _csrf: csrf, name: 'Jan Kowalski', email: 'jan.kowalski@example.local', role: 'advisor'
+  }).expect(302);
+  assert.equal(db.prepare('SELECT role FROM users WHERE id=?').get(worker.id).role, 'advisor');
+
+  await agent.post(`/settings/users/${worker.id}/password`).type('form').send({ _csrf: csrf, password: 'NoweHaslo123!' }).expect(302);
+  await agent.post(`/settings/users/${worker.id}/toggle-active`).type('form').send({ _csrf: csrf }).expect(302);
+  assert.equal(db.prepare('SELECT is_active FROM users WHERE id=?').get(worker.id).is_active, 0);
+
+  const blocked = request.agent(app);
+  const loginPage = await blocked.get('/login').expect(200);
+  const blockedCsrf = csrfFrom(loginPage.text);
+  await blocked.post('/login').type('form').send({ _csrf: blockedCsrf, email: 'jan.kowalski@example.local', password: 'NoweHaslo123!' }).expect(302).expect('Location', '/login');
 });
 
 test.after(() => {

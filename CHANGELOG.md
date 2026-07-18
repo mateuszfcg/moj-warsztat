@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.2
+
+- Naprawiono błąd startu SQLite `Cannot add a column with non-constant default` podczas migracji tabeli użytkowników.
+- Świeża baza i aktualizacja starszej bazy uruchamiają się poprawnie.
+- Dane istniejących użytkowników są zachowywane, a pole `updated_at` jest uzupełniane bezpiecznie po migracji.
+- Dodano brakujący widok modułu Przechowalnia, wykryty podczas pełnego uruchomienia testów.
+
+## 0.5.1
+
+- Dodano zarządzanie użytkownikami w Ustawieniach.
+- Dodano konta pracowników i role: Właściciel, Kierownik, Doradca serwisowy, Mechanik, Księgowość.
+- Dodano blokowanie i odblokowywanie kont oraz resetowanie haseł.
+- Ochrona ostatniego aktywnego właściciela przed przypadkowym zablokowaniem lub zmianą roli.
+- Nieaktywne konta nie mogą się logować i nie są proponowane przy przypisywaniu zadań.
+
 ## 0.5.0
 
 - Naprawiono błąd CSRF podczas wgrywania logo w formularzu `multipart/form-data`.

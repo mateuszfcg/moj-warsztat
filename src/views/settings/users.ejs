@@ -1,0 +1,27 @@
+<%- include('../partials/header') %>
+<div class="page-head">
+  <div><span class="eyebrow">Ustawienia</span><h1>Użytkownicy</h1><p>Dodawaj pracowników, przypisuj role, blokuj dostęp i zmieniaj hasła.</p></div>
+  <div class="actions"><button class="button primary" type="button" data-open-modal="user-new-modal">＋ Nowy użytkownik</button></div>
+</div>
+<section class="data-panel"><div class="table-wrap"><table class="data-table"><thead><tr><th>Użytkownik</th><th>E-mail</th><th>Rola</th><th>Status</th><th>Ostatnie logowanie</th><th></th></tr></thead><tbody>
+<% users.forEach(user => { %>
+<tr>
+  <td><strong><%= user.name %></strong><% if (user.id === currentUser.id) { %><small>Twoje konto</small><% } %></td>
+  <td><%= user.email %></td>
+  <td><span class="badge"><%= userRoles[user.role] || user.role %></span></td>
+  <td><span class="status-badge <%= user.is_active ? 'status-completed' : 'status-cancelled' %>"><%= user.is_active ? 'Aktywny' : 'Zablokowany' %></span></td>
+  <td><%= user.last_login_at ? new Date(user.last_login_at.replace(' ','T') + 'Z').toLocaleString('pl-PL') : 'Nigdy' %></td>
+  <td class="right"><div class="actions"><button class="button small" type="button" data-open-modal="user-edit-<%= user.id %>">Edytuj</button><% if (user.id !== currentUser.id) { %><form method="post" action="<%= basePath %>/settings/users/<%= user.id %>/toggle-active" class="inline"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="button small <%= user.is_active ? 'danger' : '' %>" type="submit"><%= user.is_active ? 'Zablokuj' : 'Odblokuj' %></button></form><% } %></div></td>
+</tr>
+<% }) %>
+</tbody></table></div></section>
+
+<div class="modal" id="user-new-modal" hidden><form class="modal-card" method="post" action="<%= basePath %>/settings/users"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><div class="modal-head"><h2>Nowy użytkownik</h2><button class="modal-close" type="button" data-close-modal>×</button></div><div class="modal-body"><div class="form-grid"><label>Imię i nazwisko<input name="name" required autocomplete="name"></label><label>Adres e-mail<input name="email" type="email" required autocomplete="email"></label><label>Rola<select name="role"><option value="mechanic">Mechanik</option><option value="advisor">Doradca serwisowy</option><option value="manager">Kierownik</option><option value="accounting">Księgowość</option><option value="owner">Właściciel</option></select></label><label>Hasło startowe<input name="password" type="password" minlength="8" required autocomplete="new-password"></label></div><p class="muted">Hasło musi mieć co najmniej 8 znaków. Użytkownik może zalogować się od razu po utworzeniu konta.</p></div><div class="modal-foot"><button class="button" type="button" data-close-modal>Anuluj</button><button class="button primary" type="submit">Dodaj użytkownika</button></div></form></div>
+
+<% users.forEach(user => { %>
+<div class="modal" id="user-edit-<%= user.id %>" hidden><div class="modal-card"><div class="modal-head"><h2>Edycja użytkownika</h2><button class="modal-close" type="button" data-close-modal>×</button></div><div class="modal-body">
+  <form method="post" action="<%= basePath %>/settings/users/<%= user.id %>"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><div class="form-grid"><label>Imię i nazwisko<input name="name" value="<%= user.name %>" required></label><label>Adres e-mail<input name="email" type="email" value="<%= user.email %>" required></label><label>Rola<select name="role"><% Object.entries(userRoles).forEach(([value,name]) => { %><option value="<%= value %>" <%= user.role===value?'selected':'' %>><%= name %></option><% }) %></select></label></div><div class="modal-foot inline-modal-foot"><button class="button primary" type="submit">Zapisz dane</button></div></form>
+  <hr><h3>Zmień hasło</h3><form method="post" action="<%= basePath %>/settings/users/<%= user.id %>/password"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><div class="inline-form"><label>Nowe hasło<input name="password" type="password" minlength="8" required autocomplete="new-password"></label><button class="button" type="submit">Ustaw nowe hasło</button></div></form>
+</div><div class="modal-foot"><button class="button" type="button" data-close-modal>Zamknij</button></div></div></div>
+<% }) %>
+<%- include('../partials/footer') %>

@@ -2,7 +2,7 @@
 
 Self-hosted aplikacja do obsługi warsztatu samochodowego.
 
-Aktualna wersja: **0.5.0**.
+Aktualna wersja: **0.5.2**.
 
 ## Najważniejsze moduły
 
@@ -35,7 +35,7 @@ Najważniejsze komendy:
 
 ```bash
 sudo moj-warsztat-update
-sudo moj-warsztat-update 0.5.0
+sudo moj-warsztat-update 0.5.2
 sudo moj-warsztat-rollback
 sudo moj-warsztat-version
 sudo moj-warsztat-backup
@@ -53,3 +53,7 @@ sudo moj-warsztat-restore-local /ścieżka/do/backupu.tar.gz
 - `docs/SERVER-FIRST-MIGRATION.md`
 
 > Produkcyjny KSeF nadal wymaga osobnego, zweryfikowanego adaptera. Tryb domyślny pozostaje `mock`.
+
+
+## Użytkownicy
+Właściciel może w Ustawienia → Użytkownicy dodawać konta pracowników, przypisywać role, blokować dostęp i zmieniać hasła.
