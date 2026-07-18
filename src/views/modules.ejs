@@ -1,0 +1,21 @@
+<%- include('partials/header') %>
+<section class="dashboard-hero">
+  <div><span class="eyebrow">Panel warsztatu</span><h1>W czym dziś pracujemy?</h1><p>Wybierz moduł. Najczęściej używane funkcje są dostępne bezpośrednio z kafelków.</p></div>
+  <a class="button primary" href="<%= basePath %>/orders?new=1">＋ Nowe zlecenie</a>
+</section>
+<section class="module-grid polished">
+  <a class="module-tile accent-blue" href="<%= basePath %>/orders"><span class="module-icon">ZL</span><strong>Warsztat</strong><span class="module-count"><%= stats.openOrders %> otwartych zleceń</span></a>
+  <a class="module-tile accent-violet" href="<%= basePath %>/tasks"><span class="module-icon">✓</span><strong>Zadania</strong><span class="module-count"><%= stats.openTasks %> aktywnych</span></a>
+  <a class="module-tile accent-cyan" href="<%= basePath %>/calendar"><span class="module-icon">KA</span><strong>Terminarz</strong><span class="module-count"><%= stats.todayEvents %> dzisiaj</span></a>
+  <a class="module-tile accent-amber" href="<%= basePath %>/purchases"><span class="module-icon">ZA</span><strong>Zakupy i WZ</strong><span class="module-count"><%= stats.purchases %> dokumentów</span></a>
+  <a class="module-tile accent-green" href="<%= basePath %>/invoices"><span class="module-icon">FV</span><strong>Sprzedaż</strong><span class="module-count"><%= stats.unpaidInvoices %> nierozliczonych</span></a>
+  <a class="module-tile accent-rose" href="<%= basePath %>/cash"><span class="module-icon">K</span><strong>Kasa</strong><span class="module-count">Wpływy i wydatki</span></a>
+  <a class="module-tile accent-orange" href="<%= basePath %>/catalog"><span class="module-icon">AP</span><strong>Katalog części</strong><span class="module-count">Auto Partner / WZ</span></a>
+  <a class="module-tile accent-indigo" href="<%= basePath %>/clients"><span class="module-icon">KL</span><strong>Klienci</strong><span class="module-count"><%= stats.clients %> kartotek</span></a>
+  <a class="module-tile accent-slate" href="<%= basePath %>/vehicles"><span class="module-icon">PO</span><strong>Pojazdy</strong><span class="module-count"><%= stats.vehicles %> pojazdów</span></a>
+  <a class="module-tile accent-teal" href="<%= basePath %>/reports"><span class="module-icon">RA</span><strong>Raporty</strong><span class="module-count">Sprzedaż, marża, stany</span></a>
+  <a class="module-tile accent-blue" href="<%= basePath %>/inventory"><span class="module-icon">MG</span><strong>Magazyn</strong><span class="module-count"><%= stats.stockProducts %> towarów · <%= stats.lowStock %> niski stan</span></a>
+  <a class="module-tile accent-violet" href="<%= basePath %>/storage"><span class="module-icon">PR</span><strong>Przechowalnia</strong><span class="module-count"><%= stats.storedItems %> pozycji</span></a>
+  <a class="module-tile accent-slate" href="<%= basePath %>/settings"><span class="module-icon">⚙</span><strong>Ustawienia</strong><span class="module-count">Warsztat, dokumenty, integracje</span></a>
+</section>
+<%- include('partials/footer') %>

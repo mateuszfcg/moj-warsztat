@@ -1,0 +1,30 @@
+<%- include('partials/header') %>
+<div class="page-head">
+  <div><h1>Pulpit</h1><p class="muted">Bieżący stan warsztatu.</p></div>
+  <div class="actions"><a class="button" href="<%= basePath %>/clients/new">+ Klient</a><a class="button primary" href="<%= basePath %>/orders/new">+ Zlecenie</a></div>
+</div>
+<section class="stats-grid">
+  <a class="stat-card" href="<%= basePath %>/clients"><span>Klienci</span><strong><%= stats.clients %></strong></a>
+  <a class="stat-card" href="<%= basePath %>/vehicles"><span>Pojazdy</span><strong><%= stats.vehicles %></strong></a>
+  <a class="stat-card" href="<%= basePath %>/orders"><span>Otwarte zlecenia</span><strong><%= stats.openOrders %></strong></a>
+  <a class="stat-card" href="<%= basePath %>/invoices"><span>Nierozliczone faktury</span><strong><%= stats.unpaidInvoices %></strong></a>
+</section>
+<div class="two-col">
+  <section class="card">
+    <div class="card-head"><h2>Ostatnie zlecenia</h2><a href="<%= basePath %>/orders">Wszystkie</a></div>
+    <% if (!orders.length) { %><p class="empty">Brak zleceń.</p><% } else { %>
+    <div class="table-wrap"><table><thead><tr><th>Numer</th><th>Klient</th><th>Pojazd</th><th>Status</th></tr></thead><tbody>
+    <% orders.forEach(order => { %><tr><td><a href="<%= basePath %>/orders/<%= order.id %>"><strong><%= order.number %></strong></a></td><td><%= order.client_name %></td><td><%= order.registration || '—' %> · <%= order.make || '' %> <%= order.model || '' %></td><td><span class="badge status-<%= order.status %>"><%= order.status %></span></td></tr><% }) %>
+    </tbody></table></div><% } %>
+  </section>
+  <section class="card">
+    <div class="card-head"><h2>KSeF</h2><span class="badge"><%= ksefStatus.mode %></span></div>
+    <p><%= ksefStatus.message %></p>
+    <form method="post" action="<%= basePath %>/ksef/process">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <button class="button" type="submit">Przetwórz kolejkę</button>
+    </form>
+    <% if (jobs.length) { %><ul class="activity"><% jobs.forEach(job => { %><li><span><%= job.invoice_number || 'Synchronizacja' %></span><span class="badge status-<%= job.status %>"><%= job.status %></span></li><% }) %></ul><% } %>
+  </section>
+</div>
+<%- include('partials/footer') %>

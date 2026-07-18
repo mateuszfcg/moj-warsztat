@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="pl" data-base-path="<%= basePath %>">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#f8fafc">
+  <title><%= title %> · <%= appName %></title>
+  <link rel="stylesheet" href="<%= basePath %>/public/app.css">
+</head>
+<body>
+<% if (currentUser) { %>
+<header class="topbar">
+  <a href="<%= basePath %>/modules" class="brand" aria-label="Panel główny">
+    <span class="brand-mark">MW</span><span class="brand-name"><%= appName %></span>
+  </a>
+  <div class="topbar-spacer"></div>
+  <a class="top-icon" href="<%= basePath %>/audit" aria-label="Dziennik zmian" title="Dziennik zmian">●</a>
+  <button class="top-icon" type="button" data-toggle-user aria-label="Konto" title="Konto">○</button>
+  <button class="top-icon menu-icon" type="button" data-toggle-drawer aria-label="Menu modułów" title="Menu">☰</button>
+  <div class="user-menu" data-user-menu hidden>
+    <div class="user-menu-head"><strong><%= currentUser.name %></strong><small><%= currentUser.email %></small></div>
+    <a href="<%= basePath %>/settings">⚙ Ustawienia</a>
+    <a href="<%= basePath %>/audit">◷ Historia zmian</a>
+    <form method="post" action="<%= basePath %>/logout">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <button type="submit">↪ Wyloguj</button>
+    </form>
+  </div>
+</header>
+<div class="drawer-backdrop" data-drawer-backdrop hidden></div>
+<aside class="module-drawer" data-module-drawer aria-label="Moduły">
+  <div class="drawer-head"><strong>Mój Warsztat</strong><button type="button" data-close-drawer>×</button></div>
+  <nav class="drawer-nav">
+    <a class="<%= currentPath==='/modules'||currentPath==='/' ? 'active' : '' %>" href="<%= basePath %>/modules"><span>▦</span>Panel główny</a>
+    <a class="<%= currentPath.startsWith('/orders') ? 'active' : '' %>" href="<%= basePath %>/orders"><span>ZL</span>Warsztat</a>
+    <a class="<%= currentPath.startsWith('/tasks') ? 'active' : '' %>" href="<%= basePath %>/tasks"><span>✓</span>Zadania</a>
+    <a class="<%= currentPath.startsWith('/calendar') ? 'active' : '' %>" href="<%= basePath %>/calendar"><span>KA</span>Terminarz</a>
+    <a class="<%= currentPath.startsWith('/purchases') ? 'active' : '' %>" href="<%= basePath %>/purchases"><span>WZ</span>Zakupy i WZ</a>
+    <a class="<%= currentPath.startsWith('/invoices') ? 'active' : '' %>" href="<%= basePath %>/invoices"><span>FV</span>Sprzedaż</a>
+    <a class="<%= currentPath.startsWith('/cash') ? 'active' : '' %>" href="<%= basePath %>/cash"><span>K</span>Kasa</a>
+    <a class="<%= currentPath.startsWith('/catalog') ? 'active' : '' %>" href="<%= basePath %>/catalog"><span>AP</span>Katalog części</a>
+    <a class="<%= currentPath.startsWith('/inventory') ? 'active' : '' %>" href="<%= basePath %>/inventory"><span>MG</span>Magazyn</a>
+    <a class="<%= currentPath.startsWith('/clients') ? 'active' : '' %>" href="<%= basePath %>/clients"><span>KL</span>Klienci</a>
+    <a class="<%= currentPath.startsWith('/vehicles') ? 'active' : '' %>" href="<%= basePath %>/vehicles"><span>PO</span>Pojazdy</a>
+    <a class="<%= currentPath.startsWith('/reports') ? 'active' : '' %>" href="<%= basePath %>/reports"><span>RA</span>Raporty</a>
+    <a class="<%= currentPath.startsWith('/storage') ? 'active' : '' %>" href="<%= basePath %>/storage"><span>PR</span>Przechowalnia</a>
+    <a class="<%= currentPath.startsWith('/settings') ? 'active' : '' %>" href="<%= basePath %>/settings"><span>⚙</span>Ustawienia</a>
+  </nav>
+</aside>
+<% } %>
+<main class="<%= currentUser ? 'page-shell' : 'auth-page' %>">
+<% if (currentUser) { %>
+  <div class="breadcrumb"><a href="<%= basePath %>/modules">⌂</a><span>›</span><strong><%= title %></strong></div>
+<% } %>
+<% if (flash) { %><div class="flash <%= flash.type %>"><%= flash.message %></div><% } %>

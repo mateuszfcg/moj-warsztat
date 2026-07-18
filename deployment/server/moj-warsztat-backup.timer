@@ -1,0 +1,10 @@
+[Unit]
+Description=Mój Warsztat - backup co 6 godzin
+
+[Timer]
+OnCalendar=*-*-* 00/6:00:00
+Persistent=true
+RandomizedDelaySec=10m
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,6 @@
+[Unit]
+Description=Mój Warsztat - kontrola repozytorium restic
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/moj-warsztat-backup-check

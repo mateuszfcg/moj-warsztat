@@ -1,0 +1,56 @@
+<%- include('../partials/header') %>
+<% const statusLabels={draft:'Nowe zlecenie',estimate:'Wycena',approved:'Zaakceptowane',in_progress:'W trakcie naprawy',ready:'Gotowy do odbioru',completed:'Zakończone',cancelled:'Anulowane'}; %>
+<div class="toolbar">
+  <button class="button primary" type="button" data-open-modal="order-modal">＋ Nowe zlecenie</button>
+  <button class="button danger disabled" type="button" disabled>Usuń zaznaczone</button>
+  <div class="toolbar-right">
+    <div class="price-toggle" aria-label="Widok cen"><a class="<%= priceMode==='net'?'active':'' %>" href="?q=<%= encodeURIComponent(q) %>&status=<%= encodeURIComponent(status) %>&price=net">NETTO</a><a class="<%= priceMode==='gross'?'active':'' %>" href="?q=<%= encodeURIComponent(q) %>&status=<%= encodeURIComponent(status) %>&price=gross">BRUTTO</a></div>
+    <form method="get" class="toolbar">
+      <input type="hidden" name="price" value="<%= priceMode %>">
+      <select class="filter-select" name="status"><option value="">Wszystkie statusy</option><% Object.entries(statusLabels).forEach(([key,label])=>{ %><option value="<%= key %>" <%= status===key?'selected':'' %>><%= label %></option><% }) %></select>
+      <label class="searchbox"><span>⌕</span><input name="q" value="<%= q %>" placeholder="Szukaj"></label>
+      <button class="button icon" type="submit" title="Filtruj">↵</button>
+    </form>
+  </div>
+</div>
+<section class="data-panel">
+  <div class="table-wrap"><table class="data-table"><thead><tr><th class="center"><input class="table-check" type="checkbox"></th><th>Numer zlecenia</th><th>Utworzone</th><th>Status</th><th>Klient</th><th>Pojazd</th><th>Przyjęcie</th><th class="right">Razem <%= priceMode==='gross'?'brutto':'netto' %></th></tr></thead><tbody>
+  <% orders.forEach(order=>{ %><tr><td class="center"><input class="table-check" type="checkbox"></td><td><a class="number-link" href="<%= basePath %>/orders/<%= order.id %>?price=<%= priceMode %>">▧ <%= order.number %></a></td><td><%= formatDate(order.created_at) %></td><td><span class="status-badge status-<%= order.status %>"><%= statusLabels[order.status]||order.status %></span></td><td class="client-cell"><%= order.client_name %><% if(order.client_phone){ %> · ☎<% } %></td><td><%= order.registration||'—' %> <span class="muted"><%= order.make||'' %> <%= order.model||'' %></span></td><td><%= order.scheduled_for?formatDate(order.scheduled_for):'—' %></td><td class="right"><strong><%= pln(priceMode==='gross'?order.total_gross:order.total_net) %></strong></td></tr><% }) %>
+  </tbody></table></div>
+  <% if(!orders.length){ %><div class="empty">Brak zleceń spełniających kryteria.</div><% } %>
+  <div class="table-footer"><button class="button small" type="button">Ustawienia tabeli</button><span><%= orders.length %> pozycji</span><span class="spacer"></span><strong><%= pln(orders.reduce((sum,o)=>sum+Number(priceMode==='gross'?o.total_gross:o.total_net),0)) %></strong></div>
+</section>
+
+<div class="modal" id="order-modal" hidden>
+  <form class="modal-card wide" method="post" action="<%= basePath %>/orders" data-choice-group>
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div class="modal-head"><h2>Nowe zlecenie</h2><button class="modal-close" type="button" data-close-modal>×</button></div>
+    <div class="modal-body">
+      <div class="radio-tabs">
+        <label class="radio-tab"><input type="radio" name="creation_mode" value="existing_vehicle" checked><span>Istniejący pojazd</span></label>
+        <label class="radio-tab"><input type="radio" name="creation_mode" value="new_vehicle"><span>Nowy pojazd klienta</span></label>
+        <label class="radio-tab"><input type="radio" name="creation_mode" value="new_client_vehicle"><span>Nowy klient i pojazd</span></label>
+      </div>
+      <div class="form-section" data-choice-panel="existing_vehicle" style="margin-top:12px">
+        <div class="form-section-title">Wybór kartoteki</div>
+        <label>Pojazd<select name="vehicle_id"><option value="">Wybierz klienta i pojazd</option><% vehicles.forEach(v=>{ %><option value="<%= v.id %>"><%= v.client_name %> — <%= v.registration||'bez rejestracji' %> · <%= v.make||'' %> <%= v.model||'' %></option><% }) %></select></label>
+      </div>
+      <div class="form-section" data-choice-panel="new_vehicle" hidden style="margin-top:12px">
+        <div class="form-section-title">Klient istniejący</div>
+        <label>Klient<select name="client_id"><option value="">Wybierz klienta</option><% clients.forEach(c=>{ %><option value="<%= c.id %>"><%= c.name %></option><% }) %></select></label>
+      </div>
+      <div class="form-section" data-choice-panel="new_client_vehicle" hidden style="margin-top:12px">
+        <div class="form-section-title">Nowy klient</div>
+        <div class="form-grid three"><label>Typ<select name="client_type"><option value="person">Osoba</option><option value="company">Firma</option></select></label><label class="span-2">Nazwa / imię i nazwisko<input name="client_name"></label><label>NIP<input name="client_nip"></label><label>Telefon<input name="client_phone"></label><label>E-mail<input name="client_email" type="email"></label><label class="span-3">Adres<input name="client_address"></label></div>
+      </div>
+      <div class="form-section" data-choice-panel="new_vehicle,new_client_vehicle" hidden style="margin-top:12px">
+        <div class="form-section-title">Nowy pojazd</div>
+        <div class="form-grid three"><label>Rejestracja<input name="vehicle_registration" autocomplete="off"></label><label class="span-2">VIN<input name="vehicle_vin" maxlength="17" autocomplete="off"></label><label>Marka<input name="vehicle_make"></label><label>Model<input name="vehicle_model"></label><label>Rok<input name="vehicle_year" type="number"></label><label>Silnik<input name="vehicle_engine"></label><label>Paliwo<input name="vehicle_fuel"></label><label>Kolor<input name="vehicle_color"></label></div>
+        <div style="display:flex;gap:8px;margin-top:8px"><button class="button" id="decode-vin" type="button">Rozpoznaj VIN</button></div><div id="vin-result" class="notice hidden" style="margin-top:8px"></div>
+      </div>
+      <div class="form-section" style="margin-top:12px"><div class="form-section-title">Dane zlecenia</div><div class="form-grid three"><label>Status<select name="status"><% Object.entries(statusLabels).forEach(([key,label])=>{ %><option value="<%= key %>"><%= label %></option><% }) %></select></label><label>Planowane przyjęcie<input name="scheduled_for" type="datetime-local"></label><label>Przebieg<input name="mileage_in" type="number" min="0"></label><label>Stan paliwa<select name="fuel_level"><option value="">—</option><option>Rezerwa</option><option>1/4</option><option>1/2</option><option>3/4</option><option>Pełny</option></select></label><label>Domyślny widok cen<select name="price_mode"><option value="net" <%= settings.default_price_mode==='net'?'selected':'' %>>Netto</option><option value="gross" <%= settings.default_price_mode==='gross'?'selected':'' %>>Brutto</option></select></label><label class="span-3">Zgłoszenie klienta<textarea name="complaint" rows="3"></textarea></label><label class="span-3">Notatki wewnętrzne<textarea name="notes" rows="2"></textarea></label></div></div>
+    </div>
+    <div class="modal-foot"><button class="button" type="button" data-close-modal>Anuluj</button><button class="button primary" type="submit">Utwórz zlecenie</button></div>
+  </form>
+</div>
+<%- include('../partials/footer') %>

@@ -1,0 +1,14 @@
+<%- include('../partials/header') %>
+<div class="page-head"><div><h1><%= title %></h1></div><a class="button" href="<%= basePath %><%= customer.id ? '/clients/' + customer.id : '/clients' %>">Anuluj</a></div>
+<form class="card form-grid" method="post" action="<%= basePath %><%= action %>">
+<input type="hidden" name="_csrf" value="<%= csrfToken %>">
+<label>Typ<select name="type"><option value="person" <%= customer.type !== 'company' ? 'selected' : '' %>>Osoba</option><option value="company" <%= customer.type === 'company' ? 'selected' : '' %>>Firma</option></select></label>
+<label class="span-2">Nazwa / imię i nazwisko<input name="name" required value="<%= customer.name || '' %>"></label>
+<label>NIP<input name="nip" value="<%= customer.nip || '' %>" inputmode="numeric"></label>
+<label>Telefon<input name="phone" value="<%= customer.phone || '' %>" type="tel"></label>
+<label>E-mail<input name="email" value="<%= customer.email || '' %>" type="email"></label>
+<label class="span-3">Adres<textarea name="address" rows="2"><%= customer.address || '' %></textarea></label>
+<label class="span-3">Notatki<textarea name="notes" rows="4"><%= customer.notes || '' %></textarea></label>
+<div class="span-3 form-actions"><button class="button primary" type="submit">Zapisz</button></div>
+</form>
+<%- include('../partials/footer') %>

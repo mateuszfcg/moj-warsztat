@@ -1,0 +1,13 @@
+<%- include('partials/header') %>
+<section class="login-card">
+  <div class="brand large"><span class="brand-mark">MG</span><span><%= appName %></span></div>
+  <h1>Logowanie</h1>
+  <p class="muted">Panel do obsługi warsztatu na własnym serwerze.</p>
+  <form method="post" action="<%= basePath %>/login" class="stack">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <label>E-mail<input type="email" name="email" required autofocus autocomplete="username"></label>
+    <label>Hasło<input type="password" name="password" required autocomplete="current-password"></label>
+    <button class="button primary full" type="submit">Zaloguj się</button>
+  </form>
+</section>
+<%- include('partials/footer') %>

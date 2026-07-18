@@ -1,0 +1,10 @@
+[Unit]
+Description=Mój Warsztat - cotygodniowa kontrola backupu
+
+[Timer]
+OnCalendar=Sun *-*-* 04:30:00
+Persistent=true
+RandomizedDelaySec=20m
+
+[Install]
+WantedBy=timers.target

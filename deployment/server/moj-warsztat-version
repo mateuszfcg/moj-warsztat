@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+CONFIG=${MOJ_WARSZTAT_DEPLOY_CONFIG:-/etc/moj-warsztat/deploy.env}
+[[ -f "$CONFIG" ]] && source "$CONFIG"
+CONTAINER=${CONTAINER:-moj-warsztat}
+HEALTH_URL=${HEALTH_URL:-http://127.0.0.1:3000/health}
+echo "Mój Warsztat"
+echo "Kontener: $(docker inspect -f '{{.State.Status}}' "$CONTAINER" 2>/dev/null || echo 'brak')"
+echo "Obraz: $(docker inspect -f '{{.Config.Image}}' "$CONTAINER" 2>/dev/null || echo 'brak')"
+echo -n "Aplikacja: "
+curl -fsS "$HEALTH_URL" 2>/dev/null || echo 'brak odpowiedzi'
+printf '\n'
+BACKUP_DIR=${LOCAL_BACKUP_DIR:-/var/backups/moj-warsztat}
+LATEST=$(find "$BACKUP_DIR" -maxdepth 1 -type f -name 'moj-warsztat-*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2- || true)
+echo "Ostatni backup: ${LATEST:-brak}"

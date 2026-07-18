@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+CONFIG=${MOJ_WARSZTAT_DEPLOY_CONFIG:-/etc/moj-warsztat/deploy.env}
+[[ -f "$CONFIG" ]] || { echo "Brak konfiguracji: $CONFIG" >&2; exit 1; }
+# shellcheck disable=SC1090
+source "$CONFIG"
+
+ARCHIVE=${1:-}
+[[ -n "$ARCHIVE" && -f "$ARCHIVE" ]] || { echo "Użycie: sudo moj-warsztat-restore-local /ścieżka/do/backupu.tar.gz" >&2; exit 2; }
+APP_DIR=${APP_DIR:-/opt/moj-warsztat}
+CONTAINER=${CONTAINER:-moj-warsztat}
+HEALTH_URL=${HEALTH_URL:-http://127.0.0.1:3000/health}
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+
+CURRENT_IMAGE=$(docker inspect -f '{{.Config.Image}}' "$CONTAINER" 2>/dev/null || true)
+[[ -n "$CURRENT_IMAGE" ]] || { echo "Nie udało się ustalić aktualnego obrazu kontenera." >&2; exit 3; }
+
+echo "Tworzę backup bezpieczeństwa przed odtworzeniem..."
+/usr/local/sbin/moj-warsztat-backup >/dev/null
+
+tar -xzf "$ARCHIVE" -C "$TMP"
+[[ -f "$TMP/storage/motowarsztat.sqlite" ]] || { echo "Archiwum nie zawiera poprawnej bazy SQLite." >&2; exit 4; }
+
+cd "$APP_DIR"
+echo "Zatrzymuję aplikację..."
+MOJ_WARSZTAT_IMAGE="$CURRENT_IMAGE" docker compose --env-file .env -f compose.prod.yml down
+
+echo "Odtwarzam dane..."
+mkdir -p "$APP_DIR/storage"
+rsync -a --delete "$TMP/storage/" "$APP_DIR/storage/"
+
+echo "Uruchamiam aplikację..."
+MOJ_WARSZTAT_IMAGE="$CURRENT_IMAGE" docker compose --env-file .env -f compose.prod.yml up -d --no-build
+
+for _ in {1..30}; do
+  if curl -fsS "$HEALTH_URL"; then
+    printf '\nOdtworzenie zakończone poprawnie.\n'
+    exit 0
+  fi
+  sleep 2
+done
+
+echo "Aplikacja nie przeszła testu zdrowia po odtworzeniu." >&2
+exit 5

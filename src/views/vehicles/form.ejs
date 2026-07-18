@@ -1,0 +1,19 @@
+<%- include('../partials/header') %>
+<div class="page-head"><div><h1><%= title %></h1></div><a class="button" href="<%= basePath %><%= vehicle.id ? '/vehicles/' + vehicle.id : '/vehicles' %>">Anuluj</a></div>
+<form class="card form-grid" method="post" action="<%= basePath %><%= action %>" id="vehicle-form">
+<input type="hidden" name="_csrf" value="<%= csrfToken %>">
+<label class="span-2">Klient<select name="client_id" required><option value="">Wybierz klienta</option><% clients.forEach(c => { %><option value="<%= c.id %>" <%= String(vehicle.client_id) === String(c.id) ? 'selected' : '' %>><%= c.name %></option><% }) %></select></label>
+<div class="span-1 vin-field"><label>VIN<input name="vin" id="vin" maxlength="17" value="<%= vehicle.vin || '' %>" class="mono"></label><button class="button small-button" type="button" id="decode-vin">Rozpoznaj VIN</button></div>
+<div id="vin-result" class="span-3 notice hidden"></div>
+<label>Nr rejestracyjny<input name="registration" value="<%= vehicle.registration || '' %>" style="text-transform:uppercase"></label>
+<label>Marka<input name="make" id="make" value="<%= vehicle.make || '' %>"></label>
+<label>Model<input name="model" id="model" value="<%= vehicle.model || '' %>"></label>
+<label>Rok<input name="year" id="year" type="number" min="1900" max="2100" value="<%= vehicle.year || '' %>"></label>
+<label>Silnik<input name="engine" id="engine" value="<%= vehicle.engine || '' %>"></label>
+<label>Paliwo<input name="fuel" id="fuel" value="<%= vehicle.fuel || '' %>"></label>
+<label>Przebieg<input name="mileage" type="number" min="0" value="<%= vehicle.mileage || '' %>"></label>
+<label>Kolor<input name="color" value="<%= vehicle.color || '' %>"></label>
+<label class="span-3">Notatki<textarea name="notes" rows="4"><%= vehicle.notes || '' %></textarea></label>
+<div class="span-3 form-actions"><button class="button primary" type="submit">Zapisz</button></div>
+</form>
+<%- include('../partials/footer') %>

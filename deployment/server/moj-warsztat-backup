@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+CONFIG=${MOJ_WARSZTAT_BACKUP_CONFIG:-/etc/moj-warsztat/backup.env}
+[[ -f "$CONFIG" ]] || { echo "Brak konfiguracji: $CONFIG" >&2; exit 1; }
+# shellcheck disable=SC1090
+source "$CONFIG"
+
+APP_DIR=${APP_DIR:-/opt/moj-warsztat}
+LOCAL_BACKUP_DIR=${LOCAL_BACKUP_DIR:-/var/backups/moj-warsztat}
+LOCAL_BACKUP_KEEP=${LOCAL_BACKUP_KEEP:-30}
+CONTAINER=${CONTAINER:-moj-warsztat}
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+TMP=$(mktemp -d)
+SNAPSHOT_HOST="$APP_DIR/storage/.backup-${TIMESTAMP}.sqlite"
+ARCHIVE="$LOCAL_BACKUP_DIR/moj-warsztat-${TIMESTAMP}.tar.gz"
+
+cleanup() {
+  rm -rf "$TMP"
+  rm -f "$SNAPSHOT_HOST"
+}
+trap cleanup EXIT
+
+mkdir -p "$LOCAL_BACKUP_DIR" "$TMP/storage" "$TMP/config"
+
+SQLITE_SNAPSHOT_JS="const fs=require('fs');const {DatabaseSync}=require('node:sqlite');const s=process.env.SNAP_SOURCE,t=process.env.SNAP_TARGET;if(fs.existsSync(t))fs.unlinkSync(t);const d=new DatabaseSync(s);try{d.exec('PRAGMA wal_checkpoint(FULL);');d.exec(\"VACUUM INTO '\"+t.replaceAll(\"'\",\"''\")+\"';\");}finally{d.close();}"
+
+if docker inspect "$CONTAINER" >/dev/null 2>&1; then
+  if [[ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER")" == "true" ]]; then
+    docker exec \
+      -e SNAP_SOURCE=/app/storage/motowarsztat.sqlite \
+      -e SNAP_TARGET="/app/storage/$(basename "$SNAPSHOT_HOST")" \
+      "$CONTAINER" node -e "$SQLITE_SNAPSHOT_JS"
+  else
+    IMAGE=$(docker inspect -f '{{.Config.Image}}' "$CONTAINER")
+    docker run --rm \
+      -v "$APP_DIR/storage:/app/storage" \
+      -e SNAP_SOURCE=/app/storage/motowarsztat.sqlite \
+      -e SNAP_TARGET="/app/storage/$(basename "$SNAPSHOT_HOST")" \
+      "$IMAGE" node -e "$SQLITE_SNAPSHOT_JS"
+  fi
+else
+  echo "Brak kontenera $CONTAINER. Nie można wykonać bezpiecznego snapshotu SQLite." >&2
+  exit 2
+fi
+
+rsync -a \
+  --exclude='motowarsztat.sqlite' \
+  --exclude='motowarsztat.sqlite-wal' \
+  --exclude='motowarsztat.sqlite-shm' \
+  --exclude='.backup-*.sqlite' \
+  "$APP_DIR/storage/" "$TMP/storage/"
+cp -a "$SNAPSHOT_HOST" "$TMP/storage/motowarsztat.sqlite"
+
+[[ -f "$APP_DIR/.env" ]] && cp -a "$APP_DIR/.env" "$TMP/config/.env"
+[[ -f "$APP_DIR/compose.prod.yml" ]] && cp -a "$APP_DIR/compose.prod.yml" "$TMP/config/compose.prod.yml"
+
+{
+  echo "created_at=$(date --iso-8601=seconds)"
+  echo "hostname=$(hostname)"
+  echo "container=$CONTAINER"
+  echo "image=$(docker inspect -f '{{.Config.Image}}' "$CONTAINER" 2>/dev/null || true)"
+  echo "image_id=$(docker inspect -f '{{.Image}}' "$CONTAINER" 2>/dev/null || true)"
+} > "$TMP/manifest.txt"
+
+tar -C "$TMP" -czf "$ARCHIVE" .
+chmod 600 "$ARCHIVE"
+echo "$ARCHIVE"
+
+mapfile -t OLD < <(find "$LOCAL_BACKUP_DIR" -maxdepth 1 -type f -name 'moj-warsztat-*.tar.gz' -printf '%T@ %p\n' | sort -nr | tail -n +$((LOCAL_BACKUP_KEEP + 1)) | cut -d' ' -f2-)
+if ((${#OLD[@]})); then rm -f -- "${OLD[@]}"; fi
+
+if [[ -n "${RESTIC_REPOSITORY:-}" ]]; then
+  command -v restic >/dev/null || { echo "RESTIC_REPOSITORY ustawione, ale restic nie jest zainstalowany." >&2; exit 1; }
+  export RESTIC_REPOSITORY RESTIC_PASSWORD_FILE AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+  restic backup "$TMP" --tag moj-warsztat --host "$(hostname)"
+  restic forget \
+    --keep-daily "${RESTIC_KEEP_DAILY:-7}" \
+    --keep-weekly "${RESTIC_KEEP_WEEKLY:-4}" \
+    --keep-monthly "${RESTIC_KEEP_MONTHLY:-12}"
+fi

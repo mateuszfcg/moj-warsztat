@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+CONFIG=${MOJ_WARSZTAT_DEPLOY_CONFIG:-/etc/moj-warsztat/deploy.env}
+STATE=/var/lib/moj-warsztat/deploy-state.env
+[[ -f "$CONFIG" ]] || { echo "Brak konfiguracji: $CONFIG" >&2; exit 1; }
+[[ -f "$STATE" ]] || { echo "Brak informacji o poprzedniej wersji." >&2; exit 1; }
+# shellcheck disable=SC1090
+source "$CONFIG"
+# shellcheck disable=SC1090
+source "$STATE"
+APP_DIR=${APP_DIR:-/opt/moj-warsztat}
+cd "$APP_DIR"
+/usr/local/sbin/moj-warsztat-backup >/dev/null
+if ! docker image inspect "$ROLLBACK_IMAGE" >/dev/null 2>&1; then
+  echo "Obraz rollback nie jest już dostępny lokalnie." >&2
+  exit 2
+fi
+MOJ_WARSZTAT_IMAGE="$ROLLBACK_IMAGE" docker compose --env-file .env -f compose.prod.yml up -d --no-build
+sleep 3
+curl -fsS "${HEALTH_URL:-http://127.0.0.1:3000/health}"
+printf '\n'

@@ -1,0 +1,10 @@
+.git
+.github
+node_modules
+npm-debug.log
+.env
+storage/*
+!storage/.gitkeep
+*.zip
+*.tar.gz
+backups
