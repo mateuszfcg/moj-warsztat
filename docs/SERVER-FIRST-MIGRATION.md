@@ -20,7 +20,7 @@ sudo moj-warsztat-backup
 6. Uruchom wersję z rejestru:
 
 ```bash
-sudo moj-warsztat-update 0.4.0
+sudo moj-warsztat-update 0.5.0
 ```
 
 Od tego momentu kolejne wydania można wdrażać przez `sudo moj-warsztat-update`.

@@ -2,8 +2,8 @@
 <div class="page-head"><div><h1><%= title %></h1></div><a class="button" href="<%= basePath %><%= order.id ? '/orders/' + order.id : '/orders' %>">Anuluj</a></div>
 <form class="card form-grid" method="post" action="<%= basePath %><%= action %>">
 <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-<label class="span-2">Pojazd<select name="vehicle_id" required><option value="">Wybierz pojazd</option><% vehicles.forEach(v => { %><option value="<%= v.id %>" <%= String(order.vehicle_id) === String(v.id) ? 'selected' : '' %>><%= v.client_name %> — <%= v.registration || 'bez rejestracji' %> · <%= v.make || '' %> <%= v.model || '' %></option><% }) %></select></label>
-<label>Status<select name="status"><% ['draft','estimate','approved','in_progress','ready','completed','cancelled'].forEach(s => { %><option value="<%= s %>" <%= (order.status || 'draft') === s ? 'selected' : '' %>><%= s %></option><% }) %></select></label>
+<label class="span-2">Klient i pojazd<select name="vehicle_id"><option value="">Bez klienta i pojazdu</option><% vehicles.forEach(v => { %><option value="<%= v.id %>" <%= String(order.vehicle_id) === String(v.id) ? 'selected' : '' %>><%= v.client_name %> — <%= v.registration || 'bez rejestracji' %> · <%= v.make || '' %> <%= v.model || '' %></option><% }) %></select></label>
+<label>Status<select name="status"><% ['draft','estimate','approved','in_progress','ready','completed','cancelled'].forEach(s => { %><option value="<%= s %>" <%= (order.status || 'draft') === s ? 'selected' : '' %>><%= orderStatuses[s]||s %></option><% }) %></select></label>
 <label>Przebieg przy przyjęciu<input name="mileage_in" type="number" min="0" value="<%= order.mileage_in || '' %>"></label>
 <label>Stan paliwa<select name="fuel_level"><option value="">—</option><% ['rezerwa','1/4','1/2','3/4','pełny'].forEach(s => { %><option <%= order.fuel_level === s ? 'selected' : '' %>><%= s %></option><% }) %></select></label>
 <label>Planowany termin<input name="scheduled_for" type="date" value="<%= order.scheduled_for ? String(order.scheduled_for).slice(0,10) : '' %>"></label>

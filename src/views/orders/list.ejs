@@ -15,7 +15,7 @@
 </div>
 <section class="data-panel">
   <div class="table-wrap"><table class="data-table"><thead><tr><th class="center"><input class="table-check" type="checkbox"></th><th>Numer zlecenia</th><th>Utworzone</th><th>Status</th><th>Klient</th><th>Pojazd</th><th>Przyjęcie</th><th class="right">Razem <%= priceMode==='gross'?'brutto':'netto' %></th></tr></thead><tbody>
-  <% orders.forEach(order=>{ %><tr><td class="center"><input class="table-check" type="checkbox"></td><td><a class="number-link" href="<%= basePath %>/orders/<%= order.id %>?price=<%= priceMode %>">▧ <%= order.number %></a></td><td><%= formatDate(order.created_at) %></td><td><span class="status-badge status-<%= order.status %>"><%= statusLabels[order.status]||order.status %></span></td><td class="client-cell"><%= order.client_name %><% if(order.client_phone){ %> · ☎<% } %></td><td><%= order.registration||'—' %> <span class="muted"><%= order.make||'' %> <%= order.model||'' %></span></td><td><%= order.scheduled_for?formatDate(order.scheduled_for):'—' %></td><td class="right"><strong><%= pln(priceMode==='gross'?order.total_gross:order.total_net) %></strong></td></tr><% }) %>
+  <% orders.forEach(order=>{ %><tr><td class="center"><input class="table-check" type="checkbox"></td><td><a class="number-link" href="<%= basePath %>/orders/<%= order.id %>?price=<%= priceMode %>">▧ <%= order.number %></a></td><td><%= formatDate(order.created_at) %></td><td><span class="status-badge status-<%= order.status %>"><%= statusLabels[order.status]||order.status %></span></td><td class="client-cell"><%= order.client_name||'Bez klienta' %><% if(order.client_phone){ %> · ☎<% } %></td><td><%= order.vehicle_id?(order.registration||'bez rejestracji'):'Bez pojazdu' %> <span class="muted"><%= order.make||'' %> <%= order.model||'' %></span></td><td><%= order.scheduled_for?formatDate(order.scheduled_for):'—' %></td><td class="right"><strong><%= pln(priceMode==='gross'?order.total_gross:order.total_net) %></strong></td></tr><% }) %>
   </tbody></table></div>
   <% if(!orders.length){ %><div class="empty">Brak zleceń spełniających kryteria.</div><% } %>
   <div class="table-footer"><button class="button small" type="button">Ustawienia tabeli</button><span><%= orders.length %> pozycji</span><span class="spacer"></span><strong><%= pln(orders.reduce((sum,o)=>sum+Number(priceMode==='gross'?o.total_gross:o.total_net),0)) %></strong></div>
@@ -27,10 +27,11 @@
     <div class="modal-head"><h2>Nowe zlecenie</h2><button class="modal-close" type="button" data-close-modal>×</button></div>
     <div class="modal-body">
       <div class="radio-tabs">
-        <label class="radio-tab"><input type="radio" name="creation_mode" value="existing_vehicle" checked><span>Istniejący pojazd</span></label>
+        <label class="radio-tab"><input type="radio" name="creation_mode" value="standalone" checked><span>Bez klienta i pojazdu</span></label><label class="radio-tab"><input type="radio" name="creation_mode" value="existing_vehicle"><span>Istniejący pojazd</span></label>
         <label class="radio-tab"><input type="radio" name="creation_mode" value="new_vehicle"><span>Nowy pojazd klienta</span></label>
         <label class="radio-tab"><input type="radio" name="creation_mode" value="new_client_vehicle"><span>Nowy klient i pojazd</span></label>
       </div>
+      <div class="form-section" data-choice-panel="standalone" style="margin-top:12px"><div class="form-section-title">Zlecenie robocze</div><div class="notice">Zlecenie zostanie utworzone bez klienta i bez pojazdu. Kartotekę możesz przypisać później podczas edycji zlecenia.</div></div>
       <div class="form-section" data-choice-panel="existing_vehicle" style="margin-top:12px">
         <div class="form-section-title">Wybór kartoteki</div>
         <label>Pojazd<select name="vehicle_id"><option value="">Wybierz klienta i pojazd</option><% vehicles.forEach(v=>{ %><option value="<%= v.id %>"><%= v.client_name %> — <%= v.registration||'bez rejestracji' %> · <%= v.make||'' %> <%= v.model||'' %></option><% }) %></select></label>

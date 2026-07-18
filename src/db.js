@@ -62,8 +62,8 @@ CREATE TABLE IF NOT EXISTS vehicles (
 CREATE TABLE IF NOT EXISTS work_orders (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   number TEXT NOT NULL UNIQUE,
-  client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE RESTRICT,
-  vehicle_id INTEGER NOT NULL REFERENCES vehicles(id) ON DELETE RESTRICT,
+  client_id INTEGER REFERENCES clients(id) ON DELETE RESTRICT,
+  vehicle_id INTEGER REFERENCES vehicles(id) ON DELETE RESTRICT,
   status TEXT NOT NULL DEFAULT 'draft',
   complaint TEXT,
   diagnosis TEXT,
@@ -336,6 +336,56 @@ function ensureColumn(table, name, definition) {
 }
 
 ensureColumn('work_orders', 'price_mode', "TEXT NOT NULL DEFAULT 'net'");
+
+// Migracja starszych baz: od wersji 0.5.0 zlecenie może istnieć bez klienta i pojazdu.
+// SQLite nie potrafi usunąć ograniczenia NOT NULL prostym ALTER TABLE, dlatego przebudowujemy
+// wyłącznie tabelę work_orders, zachowując identyfikatory i wszystkie dane.
+function migrateWorkOrdersNullableRelations() {
+  const columns = db.prepare('PRAGMA table_info(work_orders)').all();
+  const client = columns.find(column => column.name === 'client_id');
+  const vehicle = columns.find(column => column.name === 'vehicle_id');
+  if (!client || !vehicle || (!client.notnull && !vehicle.notnull)) return;
+
+  db.exec('PRAGMA foreign_keys = OFF;');
+  try {
+    db.exec('BEGIN IMMEDIATE;');
+    db.exec(`
+      CREATE TABLE work_orders_v050 (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        number TEXT NOT NULL UNIQUE,
+        client_id INTEGER REFERENCES clients(id) ON DELETE RESTRICT,
+        vehicle_id INTEGER REFERENCES vehicles(id) ON DELETE RESTRICT,
+        status TEXT NOT NULL DEFAULT 'draft',
+        complaint TEXT,
+        diagnosis TEXT,
+        notes TEXT,
+        mileage_in INTEGER,
+        fuel_level TEXT,
+        accepted_at TEXT,
+        acceptance_token TEXT UNIQUE,
+        scheduled_for TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        price_mode TEXT NOT NULL DEFAULT 'net'
+      );
+      INSERT INTO work_orders_v050
+        (id,number,client_id,vehicle_id,status,complaint,diagnosis,notes,mileage_in,fuel_level,accepted_at,acceptance_token,scheduled_for,created_at,updated_at,price_mode)
+      SELECT id,number,client_id,vehicle_id,status,complaint,diagnosis,notes,mileage_in,fuel_level,accepted_at,acceptance_token,scheduled_for,created_at,updated_at,COALESCE(price_mode,'net')
+      FROM work_orders;
+      DROP TABLE work_orders;
+      ALTER TABLE work_orders_v050 RENAME TO work_orders;
+      CREATE INDEX IF NOT EXISTS idx_work_orders_status ON work_orders(status);
+    `);
+    db.exec('COMMIT;');
+  } catch (error) {
+    try { db.exec('ROLLBACK;'); } catch (_) {}
+    throw error;
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON;');
+  }
+}
+
+migrateWorkOrdersNullableRelations();
 
 const defaultSettings = {
   labor_sale_rate_net: '200', labor_cost_rate_net: '80', labor_vat_rate: '23', default_price_mode: 'net',

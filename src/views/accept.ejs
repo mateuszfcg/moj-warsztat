@@ -2,7 +2,7 @@
 <section class="public-card">
   <div class="brand large"><span class="brand-mark">MG</span><span><%= company.name %></span></div>
   <div class="eyebrow">Wycena naprawy</div><h1><%= order.number %></h1>
-  <p><strong><%= order.client_name %></strong><br><%= order.registration || '' %> · <%= order.make || '' %> <%= order.model || '' %></p>
+  <p><strong><%= order.client_name||'Klient nieprzypisany' %></strong><br><%= order.vehicle_id?([order.registration,order.make,order.model].filter(Boolean).join(' ')||'Pojazd bez danych'):'Pojazd nieprzypisany' %></p>
   <div class="table-wrap"><table class="data-table" style="min-width:600px"><thead><tr><th>Pozycja</th><th>Ilość</th><th>Brutto</th></tr></thead><tbody><% items.forEach(item => { const t=lineTotals(item); %><tr><td><%= item.description %></td><td><%= item.quantity %> <%= item.unit %></td><td><%= pln(t.gross) %></td></tr><% }) %></tbody></table></div>
   <div class="public-total">Razem: <strong><%= pln(totals.gross) %></strong></div>
   <% if (order.accepted_at) { %><div class="notice success">Wycena została już zaakceptowana.</div><% } else { %>

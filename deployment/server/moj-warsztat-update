@@ -24,7 +24,14 @@ cd "$APP_DIR"
 mkdir -p /var/lib/moj-warsztat
 
 echo "[1/5] Backup przed aktualizacją..."
-/usr/local/sbin/moj-warsztat-backup >/dev/null
+if docker inspect "$CONTAINER" >/dev/null 2>&1; then
+  /usr/local/sbin/moj-warsztat-backup >/dev/null
+elif [[ -f "$APP_DIR/storage/motowarsztat.sqlite" ]]; then
+  echo "Brak kontenera $CONTAINER, ale istnieje baza danych. Uruchom poprzednią wersję lub wykonaj bezpieczną migrację przed aktualizacją." >&2
+  exit 4
+else
+  echo "Pierwsza instalacja - brak istniejących danych, pomijam backup wstępny."
+fi
 
 CURRENT_IMAGE_ID=$(docker inspect -f '{{.Image}}' "$CONTAINER" 2>/dev/null || true)
 CURRENT_IMAGE_REF=$(docker inspect -f '{{.Config.Image}}' "$CONTAINER" 2>/dev/null || true)

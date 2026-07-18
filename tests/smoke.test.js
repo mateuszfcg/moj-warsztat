@@ -34,7 +34,7 @@ test('health endpoint działa', async () => {
   assert.equal(response.body.ok, true);
   assert.equal(response.body.ksef, 'mock');
   assert.equal(response.body.app, 'Mój Warsztat');
-  assert.equal(response.body.version, '0.4.0');
+  assert.equal(response.body.version, '0.5.0');
 });
 
 test('pełny przepływ modalny: klient + pojazd + zlecenie + RBH + protokoły + faktura + KSeF + PDF', async () => {
@@ -170,6 +170,48 @@ test('ustawienia wyglądu dokumentów zapisują konfigurację', async () => {
     protocol_show_order_items: '1', protocol_show_gross_total: '1', invoice_footer: 'Stopka testowa', protocol_footer: 'Stopka protokołu'
   }).expect(302);
   assert.equal(db.prepare("SELECT value FROM app_settings WHERE key='document_accent_color'").get().value, '#123456');
+});
+
+
+test('zlecenie może powstać bez klienta i pojazdu', async () => {
+  const agent = request.agent(app);
+  let csrf = await login(agent);
+  const page = await agent.get('/orders').expect(200);
+  csrf = csrfFrom(page.text);
+  const response = await agent.post('/orders').type('form').send({
+    _csrf: csrf, creation_mode: 'standalone', status: 'draft', complaint: 'Zlecenie bez kartoteki', price_mode: 'net'
+  }).expect(302);
+  assert.match(response.headers.location, /^\/orders\/\d+$/);
+  const order = db.prepare("SELECT * FROM work_orders WHERE complaint='Zlecenie bez kartoteki'").get();
+  assert.ok(order);
+  assert.equal(order.client_id, null);
+  assert.equal(order.vehicle_id, null);
+  const show = await agent.get(`/orders/${order.id}`).expect(200);
+  assert.match(show.text, /Bez klienta/);
+  assert.match(show.text, /Bez pojazdu/);
+});
+
+test('raporty obsługują zakres dat oraz eksport PDF i Excel', async () => {
+  const agent = request.agent(app);
+  await login(agent);
+  const page = await agent.get('/reports?from=2026-07-01&to=2026-07-31').expect(200);
+  assert.match(page.text, /Pobierz Excel/);
+  const pdf = await agent.get('/reports/pdf?from=2026-07-01&to=2026-07-31').expect(200);
+  assert.match(pdf.headers['content-type'], /application\/pdf/);
+  const excel = await agent.get('/reports/excel?from=2026-07-01&to=2026-07-31').expect(200);
+  assert.match(excel.headers['content-type'], /(spreadsheet|octet-stream)/);
+  assert.match(excel.headers['content-disposition'], /raport_2026-07-01_2026-07-31\.xlsx/);
+});
+
+test('wgrywanie logo działa z CSRF w multipart/form-data', async () => {
+  const agent = request.agent(app);
+  let csrf = await login(agent);
+  const page = await agent.get('/settings/documents').expect(200);
+  csrf = csrfFrom(page.text);
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6xJkAAAAASUVORK5CYII=', 'base64');
+  await agent.post('/settings/documents/logo').field('_csrf', csrf).attach('logo', png, { filename: 'logo.png', contentType: 'image/png' }).expect(302);
+  const row = db.prepare("SELECT value FROM app_settings WHERE key='document_logo_path'").get();
+  assert.ok(row?.value);
 });
 
 test.after(() => {

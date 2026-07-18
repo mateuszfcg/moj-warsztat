@@ -52,7 +52,7 @@ sudo moj-warsztat-update
 Można też wskazać konkretną wersję:
 
 ```bash
-sudo moj-warsztat-update 0.4.0
+sudo moj-warsztat-update 0.5.0
 ```
 
 Przed zmianą wykonywany jest backup. Po uruchomieniu nowego kontenera wykonywany jest test `/health`. Gdy test nie przejdzie, skrypt automatycznie wraca do poprzedniego lokalnego obrazu.

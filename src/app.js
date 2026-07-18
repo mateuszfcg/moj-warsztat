@@ -13,6 +13,8 @@ const { validateVin, decodeVin, normalizeVin } = require('./services/vin');
 const { sumItems, lineTotals, pln, round2 } = require('./services/money');
 const { getSettings, saveSettings } = require('./settings');
 const { generateInvoicePdf, generateProtocolPdf } = require('./services/pdf');
+const { generateReportPdf, generateReportExcel } = require('./services/report');
+const { label } = require('./i18n');
 const mail = require('./services/mail');
 const ksef = require('./services/ksef');
 
@@ -93,6 +95,9 @@ function csrfMiddleware(req, res, next) {
   if (!req.session.csrfToken) req.session.csrfToken = crypto.randomBytes(24).toString('hex');
   res.locals.csrfToken = req.session.csrfToken;
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+    // multipart/form-data jest parsowane przez multer dopiero na poziomie konkretnej trasy.
+    // Walidację CSRF dla uploadów wykonujemy po upload.single(...).
+    if (req.is('multipart/form-data')) return next();
     const token = req.body?._csrf || req.get('x-csrf-token');
     if (!token || token !== req.session.csrfToken) return res.status(403).send('Nieprawidłowy token CSRF. Odśwież stronę i spróbuj ponownie.');
   }
@@ -111,12 +116,23 @@ app.use((req, res, next) => {
   res.locals.flash = req.session.flash || null;
   res.locals.pln = pln;
   res.locals.lineTotals = lineTotals;
-  res.locals.orderStatuses = { draft: 'Nowe zlecenie', accepted: 'Zaakceptowane', in_progress: 'W trakcie naprawy', ready: 'Gotowy do odbioru', completed: 'Zakończone', cancelled: 'Anulowane' };
+  res.locals.orderStatuses = { draft: 'Nowe zlecenie', estimate: 'Wycena', approved: 'Zaakceptowane', accepted: 'Zaakceptowane', in_progress: 'W trakcie naprawy', ready: 'Gotowy do odbioru', completed: 'Zakończone', cancelled: 'Anulowane' };
   res.locals.taskStatuses = { todo: 'Do zrobienia', in_progress: 'W trakcie', done: 'Zakończone' };
+  res.locals.label = label;
   res.locals.formatDate = (value) => value ? new Date(`${value}`.length === 10 ? `${value}T12:00:00` : value).toLocaleDateString('pl-PL') : '—';
   delete req.session.flash;
   next();
 });
+
+function multipartCsrfRequired(req, res, next) {
+  const token = req.body?._csrf || req.get('x-csrf-token');
+  if (!token || token !== req.session.csrfToken) {
+    const files = req.files || (req.file ? [req.file] : []);
+    for (const file of files) { try { fs.unlinkSync(file.path); } catch (_) {} }
+    return res.status(403).send('Nieprawidłowy token CSRF. Odśwież stronę i spróbuj ponownie.');
+  }
+  next();
+}
 
 const upload = multer({
   storage: multer.diskStorage({
@@ -305,8 +321,8 @@ app.get('/orders', authRequired, (req, res) => {
     COALESCE(SUM(i.quantity * i.unit_price_net),0) total_net,
     COALESCE(SUM(i.quantity * i.unit_price_net * (1 + i.vat_rate / 100.0)),0) total_gross
     FROM work_orders w
-    JOIN clients c ON c.id=w.client_id
-    JOIN vehicles v ON v.id=w.vehicle_id
+    LEFT JOIN clients c ON c.id=w.client_id
+    LEFT JOIN vehicles v ON v.id=w.vehicle_id
     LEFT JOIN work_order_items i ON i.work_order_id=w.id
     WHERE 1=1`;
   const params = [];
@@ -345,13 +361,15 @@ function validateNewVehiclePayload(body) {
 }
 
 app.post('/orders', authRequired, (req, res) => {
-  const mode = ['existing_vehicle','new_vehicle','new_client_vehicle'].includes(req.body.creation_mode)
-    ? req.body.creation_mode : 'existing_vehicle';
+  const mode = ['standalone','existing_vehicle','new_vehicle','new_client_vehicle'].includes(req.body.creation_mode)
+    ? req.body.creation_mode : 'standalone';
   try {
     const create = db.transaction(() => {
-      let clientId;
-      let vehicleId;
-      if (mode === 'existing_vehicle') {
+      let clientId = null;
+      let vehicleId = null;
+      if (mode === 'standalone') {
+        // Zlecenie robocze bez kartoteki klienta i pojazdu. Dane można przypisać później.
+      } else if (mode === 'existing_vehicle') {
         const vehicle = db.prepare('SELECT * FROM vehicles WHERE id=?').get(req.body.vehicle_id);
         if (!vehicle) throw new Error('Wybierz istniejący pojazd.');
         clientId = Number(vehicle.client_id);
@@ -387,7 +405,7 @@ app.post('/orders', authRequired, (req, res) => {
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).run(number, clientId, vehicleId, req.body.status || 'draft', req.body.complaint || null,
           req.body.diagnosis || null, req.body.notes || null, req.body.mileage_in || null, req.body.fuel_level || null,
           req.body.scheduled_for || null, token, priceMode);
-      if (req.body.mileage_in) db.prepare('UPDATE vehicles SET mileage=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').run(req.body.mileage_in, vehicleId);
+      if (req.body.mileage_in && vehicleId) db.prepare('UPDATE vehicles SET mileage=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').run(req.body.mileage_in, vehicleId);
       audit(req.session.user.id, 'create', 'work_order', result.lastInsertRowid, { number, source: 'modal' });
       return { id: Number(result.lastInsertRowid), number };
     });
@@ -403,7 +421,7 @@ app.post('/orders', authRequired, (req, res) => {
 function getOrder(id) {
   return db.prepare(`SELECT w.*, c.name client_name,c.email client_email,c.phone client_phone,c.nip client_nip,c.address client_address,
     v.registration,v.vin,v.make,v.model,v.year,v.engine,v.fuel,v.mileage
-    FROM work_orders w JOIN clients c ON c.id=w.client_id JOIN vehicles v ON v.id=w.vehicle_id WHERE w.id=?`).get(id);
+    FROM work_orders w LEFT JOIN clients c ON c.id=w.client_id LEFT JOIN vehicles v ON v.id=w.vehicle_id WHERE w.id=?`).get(id);
 }
 
 app.get('/orders/:id', authRequired, (req, res) => {
@@ -433,12 +451,11 @@ app.get('/orders/:id/edit', authRequired, (req, res) => {
 });
 
 app.post('/orders/:id', authRequired, (req, res) => {
-  const vehicle = db.prepare('SELECT * FROM vehicles WHERE id=?').get(req.body.vehicle_id);
-  if (!vehicle) { setFlash(req, 'error', 'Wybierz pojazd.'); return res.redirect(appUrl(`/orders/${req.params.id}/edit`)); }
+  const vehicle = req.body.vehicle_id ? db.prepare('SELECT * FROM vehicles WHERE id=?').get(req.body.vehicle_id) : null;
   db.prepare(`UPDATE work_orders SET client_id=?,vehicle_id=?,status=?,complaint=?,diagnosis=?,notes=?,mileage_in=?,fuel_level=?,scheduled_for=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`)
-    .run(vehicle.client_id, vehicle.id, req.body.status, req.body.complaint || null, req.body.diagnosis || null, req.body.notes || null,
+    .run(vehicle ? vehicle.client_id : null, vehicle ? vehicle.id : null, req.body.status, req.body.complaint || null, req.body.diagnosis || null, req.body.notes || null,
       req.body.mileage_in || null, req.body.fuel_level || null, req.body.scheduled_for || null, req.params.id);
-  if (req.body.mileage_in) db.prepare('UPDATE vehicles SET mileage=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').run(req.body.mileage_in, vehicle.id);
+  if (req.body.mileage_in && vehicle) db.prepare('UPDATE vehicles SET mileage=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').run(req.body.mileage_in, vehicle.id);
   audit(req.session.user.id, 'update', 'work_order', req.params.id);
   setFlash(req, 'success', 'Zlecenie zapisane.');
   res.redirect(appUrl(`/orders/${req.params.id}`));
@@ -474,7 +491,7 @@ app.post('/orders/:orderId/items/:itemId/delete', authRequired, (req, res) => {
   res.redirect(appUrl(`/orders/${req.params.orderId}`));
 });
 
-app.post('/orders/:id/attachments', authRequired, upload.array('files', 8), (req, res) => {
+app.post('/orders/:id/attachments', authRequired, upload.array('files', 8), multipartCsrfRequired, (req, res) => {
   const insert = db.prepare('INSERT INTO attachments (work_order_id,filename,original_name,mime_type) VALUES (?,?,?,?)');
   const tx = db.transaction((files) => files.forEach(file => insert.run(req.params.id, file.filename, file.originalname, file.mimetype)));
   tx(req.files || []);
@@ -502,12 +519,14 @@ app.post('/orders/:id/protocols', authRequired, (req, res) => {
 app.get('/protocols/:id/pdf', authRequired, async (req, res, next) => {
   try {
     const file = await generateProtocolPdf(req.params.id);
-    res.download(file.filepath, file.filename);
+    if (req.query.download === '1') return res.download(file.filepath, file.filename);
+    res.setHeader('Content-Disposition', `inline; filename="${file.filename}"`);
+    res.sendFile(file.filepath);
   } catch (error) { next(error); }
 });
 
 app.get('/accept/:token', (req, res) => {
-  const order = db.prepare(`SELECT w.*, c.name client_name, v.registration,v.make,v.model FROM work_orders w JOIN clients c ON c.id=w.client_id JOIN vehicles v ON v.id=w.vehicle_id WHERE w.acceptance_token=?`).get(req.params.token);
+  const order = db.prepare(`SELECT w.*, c.name client_name, v.registration,v.make,v.model FROM work_orders w LEFT JOIN clients c ON c.id=w.client_id LEFT JOIN vehicles v ON v.id=w.vehicle_id WHERE w.acceptance_token=?`).get(req.params.token);
   if (!order) return res.status(404).render('error', { title: 'Nieprawidłowy link', message: 'Nie znaleziono wyceny lub link wygasł.' });
   const items = db.prepare('SELECT * FROM work_order_items WHERE work_order_id=? ORDER BY id').all(order.id);
   res.render('accept', { title: `Akceptacja ${order.number}`, order, items, totals: sumItems(items) });
@@ -531,6 +550,7 @@ app.post('/orders/:id/invoice', authRequired, (req, res) => {
   const order = getOrder(req.params.id);
   if (!order) return res.status(404).send('Nie znaleziono zlecenia.');
   const items = db.prepare('SELECT * FROM work_order_items WHERE work_order_id=?').all(order.id);
+  if (!order.client_id) { setFlash(req, 'error', 'Przed wystawieniem faktury przypisz klienta do zlecenia.'); return res.redirect(appUrl(`/orders/${order.id}`)); }
   if (!items.length) { setFlash(req, 'error', 'Dodaj przynajmniej jedną pozycję do zlecenia.'); return res.redirect(appUrl(`/orders/${order.id}`)); }
   const existing = db.prepare('SELECT id FROM invoices WHERE work_order_id=? AND status != ?').get(order.id, 'cancelled');
   if (existing) return res.redirect(appUrl(`/invoices/${existing.id}`));
@@ -573,7 +593,9 @@ app.post('/invoices/:id/status', authRequired, (req, res) => {
 app.get('/invoices/:id/pdf', authRequired, async (req, res, next) => {
   try {
     const file = await generateInvoicePdf(req.params.id);
-    res.download(file.filepath, file.filename);
+    if (req.query.download === '1') return res.download(file.filepath, file.filename);
+    res.setHeader('Content-Disposition', `inline; filename="${file.filename}"`);
+    res.sendFile(file.filepath);
   } catch (error) { next(error); }
 });
 
@@ -617,7 +639,7 @@ function safeNumber(value, fallback = 0) {
 }
 function openOrders() {
   return db.prepare(`SELECT w.id,w.number,w.status,c.name client_name,v.registration,v.make,v.model
-    FROM work_orders w JOIN clients c ON c.id=w.client_id JOIN vehicles v ON v.id=w.vehicle_id
+    FROM work_orders w LEFT JOIN clients c ON c.id=w.client_id LEFT JOIN vehicles v ON v.id=w.vehicle_id
     WHERE w.status NOT IN ('completed','cancelled') ORDER BY w.id DESC LIMIT 200`).all();
 }
 function upsertInventoryProduct(item, quantity, userId, notes, purchaseItemId = null) {
@@ -756,7 +778,7 @@ app.get('/purchases/:id', authRequired, (req, res) => {
   const document = db.prepare(`SELECT d.*,s.name supplier_name,s.code supplier_code FROM purchase_documents d LEFT JOIN suppliers s ON s.id=d.supplier_id WHERE d.id=?`).get(req.params.id);
   if (!document) return res.status(404).render('error', { title: 'Brak dokumentu', message: 'Nie znaleziono dokumentu zakupu.' });
   const items = db.prepare('SELECT * FROM purchase_document_items WHERE purchase_document_id=? ORDER BY id').all(document.id);
-  res.render('purchases/show', { title: `${document.type.toUpperCase()} ${document.number}`, document, items, orders: openOrders() });
+  res.render('purchases/show', { title: `${label('purchaseType', document.type)} ${document.number}`, document, items, orders: openOrders() });
 });
 
 app.post('/purchases/:id/items', authRequired, (req, res) => {
@@ -871,14 +893,65 @@ app.post('/cash', authRequired, (req, res) => {
   res.redirect(appUrl('/cash'));
 });
 
-app.get('/reports', authRequired, (_req, res) => {
+function normalizeReportRange(query) {
+  const today = new Date();
+  const first = new Date(today.getFullYear(), today.getMonth(), 1);
+  const iso = date => date.toISOString().slice(0, 10);
+  const valid = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
+  let from = valid(query.from) ? query.from : iso(first);
+  let to = valid(query.to) ? query.to : iso(today);
+  if (from > to) [from, to] = [to, from];
+  return { from, to };
+}
+
+function loadReportData(from, to) {
   const revenue = db.prepare(`SELECT COALESCE(SUM(ii.quantity*ii.unit_price_net),0) net,
-    COALESCE(SUM(ii.quantity*ii.unit_price_net*(1+ii.vat_rate/100.0)),0) gross FROM invoice_items ii JOIN invoices i ON i.id=ii.invoice_id WHERE i.status!='cancelled'`).get();
-  const orderProfit = db.prepare(`SELECT COALESCE(SUM(quantity*unit_price_net),0) sales_net,COALESCE(SUM(quantity*cost_net),0) cost_net FROM work_order_items`).get();
-  const purchases = db.prepare(`SELECT COALESCE(SUM(quantity*purchase_price_net),0) net FROM purchase_document_items`).get();
-  const orderStatus = db.prepare('SELECT status,COUNT(*) count FROM work_orders GROUP BY status ORDER BY count DESC').all();
+    COALESCE(SUM(ii.quantity*ii.unit_price_net*ii.vat_rate/100.0),0) vat,
+    COALESCE(SUM(ii.quantity*ii.unit_price_net*(1+ii.vat_rate/100.0)),0) gross
+    FROM invoice_items ii JOIN invoices i ON i.id=ii.invoice_id
+    WHERE i.status!='cancelled' AND i.issue_date BETWEEN ? AND ?`).get(from, to);
+  const orderProfit = db.prepare(`SELECT COALESCE(SUM(woi.quantity*woi.unit_price_net),0) sales_net,
+    COALESCE(SUM(woi.quantity*woi.cost_net),0) cost_net FROM work_order_items woi
+    JOIN work_orders w ON w.id=woi.work_order_id WHERE date(w.created_at) BETWEEN ? AND ?`).get(from, to);
+  const purchases = db.prepare(`SELECT COALESCE(SUM(i.quantity*i.purchase_price_net),0) net FROM purchase_document_items i
+    JOIN purchase_documents d ON d.id=i.purchase_document_id WHERE d.issue_date BETWEEN ? AND ?`).get(from, to);
+  const orderStatus = db.prepare(`SELECT status,COUNT(*) count FROM work_orders WHERE date(created_at) BETWEEN ? AND ? GROUP BY status ORDER BY count DESC`).all(from, to);
   const lowStock = db.prepare('SELECT * FROM inventory_products WHERE stock_qty<=min_stock ORDER BY stock_qty LIMIT 25').all();
-  res.render('reports/index', { title: 'Raporty', revenue, orderProfit, purchases, orderStatus, lowStock });
+  const invoices = db.prepare(`SELECT i.number,i.issue_date,i.status,c.name client_name,
+    COALESCE(SUM(ii.quantity*ii.unit_price_net),0) net,
+    COALESCE(SUM(ii.quantity*ii.unit_price_net*ii.vat_rate/100.0),0) vat,
+    COALESCE(SUM(ii.quantity*ii.unit_price_net*(1+ii.vat_rate/100.0)),0) gross
+    FROM invoices i LEFT JOIN clients c ON c.id=i.client_id LEFT JOIN invoice_items ii ON ii.invoice_id=i.id
+    WHERE i.status!='cancelled' AND i.issue_date BETWEEN ? AND ? GROUP BY i.id ORDER BY i.issue_date DESC,i.id DESC`).all(from, to);
+  return { from, to, revenue, orderProfit, purchases, orderStatus, lowStock, invoices };
+}
+
+app.get('/reports', authRequired, (req, res) => {
+  const { from, to } = normalizeReportRange(req.query);
+  res.render('reports/index', { title: 'Raporty', ...loadReportData(from, to) });
+});
+
+app.get('/reports/print', authRequired, (req, res) => {
+  const { from, to } = normalizeReportRange(req.query);
+  res.render('reports/print', { title: 'Raport do wydruku', ...loadReportData(from, to) });
+});
+
+app.get('/reports/pdf', authRequired, async (req, res, next) => {
+  try {
+    const { from, to } = normalizeReportRange(req.query);
+    const file = await generateReportPdf(loadReportData(from, to));
+    if (req.query.download === '1') return res.download(file.filepath, file.filename);
+    res.setHeader('Content-Disposition', `inline; filename="${file.filename}"`);
+    res.sendFile(file.filepath);
+  } catch (error) { next(error); }
+});
+
+app.get('/reports/excel', authRequired, async (req, res, next) => {
+  try {
+    const { from, to } = normalizeReportRange(req.query);
+    const file = await generateReportExcel(loadReportData(from, to));
+    res.download(file.filepath, file.filename);
+  } catch (error) { next(error); }
 });
 
 app.get('/storage', authRequired, (_req, res) => {
@@ -980,7 +1053,7 @@ app.post('/settings/documents', authRequired, (req, res) => {
   res.redirect(appUrl('/settings/documents'));
 });
 
-app.post('/settings/documents/logo', authRequired, upload.single('logo'), (req, res) => {
+app.post('/settings/documents/logo', authRequired, upload.single('logo'), multipartCsrfRequired, (req, res) => {
   if (!req.file || !['image/jpeg','image/png'].includes(req.file.mimetype)) {
     setFlash(req, 'error', 'Wybierz plik logo JPG lub PNG.');
     return res.redirect(appUrl('/settings/documents'));

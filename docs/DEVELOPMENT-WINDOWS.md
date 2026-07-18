@@ -57,10 +57,10 @@ Zmień numer w `package.json`, uruchom testy i utwórz tag:
 ```powershell
 npm test
 git add .
-git commit -m "Release 0.4.0"
-git tag v0.4.0
-git push
-git push origin v0.4.0
+git commit -m "Mój Warsztat 0.5.0"
+git tag -a v0.5.0 -m "Mój Warsztat 0.5.0"
+git push origin main
+git push origin v0.5.0
 ```
 
-GitHub Actions zbuduje obraz i opublikuje tagi `0.4.0`, `0.4` i `stable` w GHCR.
+GitHub Actions zbuduje obraz i opublikuje tagi `0.5.0`, `0.5` i `stable` w GHCR.

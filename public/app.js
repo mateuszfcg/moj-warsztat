@@ -107,6 +107,20 @@
 
   all('[data-color-input]').forEach(input => input.addEventListener('input', () => {
     document.documentElement.style.setProperty(input.dataset.colorInput, input.value);
+    one('.preview-document')?.style.setProperty(input.dataset.colorInput, input.value);
+    const row = input.closest('.color-row');
+    const textInput = row?.querySelector('input[type="text"],input:not([type])');
+    if (textInput) textInput.value = input.value;
+  }));
+
+  // Gdy użytkownik wpisze kod HEX ręcznie, aktualizujemy próbnik koloru i podgląd.
+  all('.color-row input[type="text"],.color-row input:not([type])').forEach(input => input.addEventListener('input', () => {
+    if (!/^#[0-9a-f]{6}$/i.test(input.value)) return;
+    const picker = input.closest('.color-row')?.querySelector('input[type="color"]');
+    if (picker) {
+      picker.value = input.value;
+      if (picker.dataset.colorInput) { document.documentElement.style.setProperty(picker.dataset.colorInput, input.value); one('.preview-document')?.style.setProperty(picker.dataset.colorInput, input.value); }
+    }
   }));
 
 

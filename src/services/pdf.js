@@ -5,6 +5,7 @@ const config = require('../config');
 const { db } = require('../db');
 const { getSettings } = require('../settings');
 const { lineTotals, sumItems, pln } = require('./money');
+const { label } = require('../i18n');
 
 function safeName(value) {
   return String(value).replace(/[^a-zA-Z0-9_-]+/g, '_');
@@ -28,9 +29,11 @@ function color(value, fallback) {
 function drawPageFooter(doc, settings, fonts, text) {
   const oldY = doc.y;
   doc.save();
-  doc.strokeColor('#d8dee4').lineWidth(0.5).moveTo(45, 790).lineTo(550, 790).stroke();
-  doc.fillColor('#6b7785').font(fonts.regular).fontSize(7.5).text(text || '', 45, 798, { width: 430 });
-  doc.text(`Strona ${doc.page.number}`, 480, 798, { width: 70, align: 'right' });
+  // Stopka mieści się ponad dolnym marginesem PDFKit. Poprzednia pozycja 798 pkt
+  // mogła automatycznie tworzyć kolejne puste strony przy każdym renderowaniu stopki.
+  doc.strokeColor('#d8dee4').lineWidth(0.5).moveTo(45, 770).lineTo(550, 770).stroke();
+  doc.fillColor('#6b7785').font(fonts.regular).fontSize(7).text(text || '', 45, 778, { width: 420, height: 12, ellipsis: true });
+  doc.text(`Strona ${doc.page.number || 1}`, 480, 778, { width: 70, height: 12, align: 'right' });
   doc.restore();
   doc.y = oldY;
 }
@@ -42,7 +45,7 @@ function addDocumentPage(doc, settings, fonts, footerText) {
 }
 
 function ensureSpace(doc, needed, settings, fonts, footerText) {
-  if (doc.y + needed > 775) addDocumentPage(doc, settings, fonts, footerText);
+  if (doc.y + needed > 752) addDocumentPage(doc, settings, fonts, footerText);
 }
 
 function drawDocumentHeader(doc, title, number, settings, fonts) {
@@ -55,8 +58,9 @@ function drawDocumentHeader(doc, title, number, settings, fonts) {
   } else {
     doc.font(fonts.bold).fillColor(accent).fontSize(17).text(config.company.name, 45, 61, { width: 260 });
   }
-  doc.fillColor('#26323d').font(fonts.bold).fontSize(18).text(title, 320, 58, { width: 230, align: 'right' });
-  if (number) doc.font(fonts.regular).fontSize(9).fillColor('#687481').text(number, 320, 82, { width: 230, align: 'right' });
+  const titleSize = String(title).length > 22 ? 13.5 : 18;
+  doc.fillColor('#26323d').font(fonts.bold).fontSize(titleSize).text(title, 290, 58, { width: 260, align: 'right', lineGap: 1 });
+  if (number) doc.font(fonts.regular).fontSize(8.5).fillColor('#687481').text(number, 320, 94, { width: 230, align: 'right' });
   doc.y = 116;
 }
 
@@ -122,7 +126,7 @@ function drawInvoiceRows(doc, items, columns, settings, fonts, footerText) {
     const descCol = columns.find(col => col.key === 'description');
     const descHeight = doc.heightOfString(item.description, { width: Math.max(50, descCol.width - 8) });
     const rowHeight = Math.max(settings.document_compact ? 23 : 29, descHeight + 10);
-    if (doc.y + rowHeight > 775) {
+    if (doc.y + rowHeight > 752) {
       addDocumentPage(doc, settings, fonts, footerText);
       drawTableHeader(doc, columns, settings, fonts);
     }
@@ -145,7 +149,7 @@ async function generateInvoicePdf(invoiceId) {
   const settings = getSettings();
   const filename = `faktura_${safeName(invoice.number)}.pdf`;
   const filepath = path.join(config.pdfDir, filename);
-  const doc = new PDFDocument({ margin: 45, size: 'A4', autoFirstPage: true, bufferPages: true });
+  const doc = new PDFDocument({ margin: 45, size: 'A4', autoFirstPage: true });
   const fonts = setupFonts(doc);
   const stream = fs.createWriteStream(filepath);
   doc.pipe(stream);
@@ -157,7 +161,7 @@ async function generateInvoicePdf(invoiceId) {
   drawBox(doc, 303, 116, 247, 'NABYWCA', [invoice.client_name, invoice.client_address, invoice.client_nip ? `NIP: ${invoice.client_nip}` : '', [invoice.client_email, invoice.client_phone].filter(Boolean).join(' · ')], fonts, settings);
   doc.y = 220;
   drawMeta(doc, [
-    ['Data wystawienia', invoice.issue_date], ['Data sprzedaży', invoice.sale_date], ['Termin płatności', invoice.due_date], ['Forma płatności', invoice.payment_method]
+    ['Data wystawienia', invoice.issue_date], ['Data sprzedaży', invoice.sale_date], ['Termin płatności', invoice.due_date], ['Forma płatności', label('payment', invoice.payment_method)]
   ], 45, 220, 250, fonts);
   if (settings.document_show_bank_account && settings.document_bank_account) {
     drawMeta(doc, [['Rachunek', settings.document_bank_account], ['Bank', settings.document_bank_name]], 303, 220, 247, fonts);
@@ -180,11 +184,6 @@ async function generateInvoicePdf(invoiceId) {
   if (invoice.ksef_number) doc.font(fonts.regular).fontSize(7.5).fillColor('#687481').text(`Numer KSeF: ${invoice.ksef_number}`);
   if (invoice.notes) doc.moveDown().fontSize(8).fillColor('#35414c').text(`Uwagi: ${invoice.notes}`);
 
-  const range = doc.bufferedPageRange();
-  for (let i = range.start; i < range.start + range.count; i += 1) {
-    doc.switchToPage(i);
-    drawPageFooter(doc, settings, fonts, footerText);
-  }
   await new Promise((resolve, reject) => {
     stream.on('finish', resolve); stream.on('error', reject); doc.on('error', reject); doc.end();
   });
@@ -204,10 +203,10 @@ function protocolFields(type, body) {
 }
 
 async function generateProtocolPdf(protocolId) {
-  const protocol = db.prepare(`SELECT p.*, w.number work_order_number, w.mileage_in, w.fuel_level, w.complaint,
+  const protocol = db.prepare(`SELECT p.*, w.number work_order_number, w.vehicle_id, w.mileage_in, w.fuel_level, w.complaint,
     c.name client_name, c.nip client_nip, c.address client_address, c.phone client_phone,
     v.registration, v.vin, v.make, v.model, v.year
-    FROM protocols p JOIN work_orders w ON w.id=p.work_order_id JOIN clients c ON c.id=w.client_id JOIN vehicles v ON v.id=w.vehicle_id
+    FROM protocols p JOIN work_orders w ON w.id=p.work_order_id LEFT JOIN clients c ON c.id=w.client_id LEFT JOIN vehicles v ON v.id=w.vehicle_id
     WHERE p.id=?`).get(protocolId);
   if (!protocol) throw new Error('Nie znaleziono protokołu.');
   const items = db.prepare('SELECT * FROM work_order_items WHERE work_order_id=? ORDER BY id').all(protocol.work_order_id);
@@ -217,7 +216,7 @@ async function generateProtocolPdf(protocolId) {
   const title = protocol.type === 'release' ? 'PROTOKÓŁ WYDANIA POJAZDU' : 'PROTOKÓŁ PRZYJĘCIA POJAZDU';
   const filename = `protokol_${protocol.type}_${safeName(protocol.work_order_number)}.pdf`;
   const filepath = path.join(config.pdfDir, filename);
-  const doc = new PDFDocument({ margin: 45, size: 'A4', autoFirstPage: true, bufferPages: true });
+  const doc = new PDFDocument({ margin: 45, size: 'A4', autoFirstPage: true });
   const fonts = setupFonts(doc);
   const stream = fs.createWriteStream(filepath);
   doc.pipe(stream);
@@ -225,7 +224,7 @@ async function generateProtocolPdf(protocolId) {
   drawPageFooter(doc, settings, fonts, footerText);
   drawDocumentHeader(doc, title, protocol.work_order_number, settings, fonts);
   drawBox(doc, 45, 116, 247, 'WARSZTAT', [config.company.name, config.company.address, config.company.nip ? `NIP: ${config.company.nip}` : '', settings.document_show_company_contact ? [config.company.email, config.company.phone].filter(Boolean).join(' · ') : ''], fonts, settings);
-  drawBox(doc, 303, 116, 247, 'KLIENT I POJAZD', [protocol.client_name, protocol.client_address, protocol.client_nip ? `NIP: ${protocol.client_nip}` : '', `${protocol.make || ''} ${protocol.model || ''} ${protocol.year || ''}`.trim(), `${protocol.registration || 'bez rejestracji'} · VIN: ${protocol.vin || '—'}`], fonts, settings);
+  drawBox(doc, 303, 116, 247, 'KLIENT I POJAZD', [protocol.client_name || 'Klient nieprzypisany', protocol.client_address, protocol.client_nip ? `NIP: ${protocol.client_nip}` : '', `${protocol.make || ''} ${protocol.model || ''} ${protocol.year || ''}`.trim() || 'Pojazd nieprzypisany', protocol.vehicle_id ? `${protocol.registration || 'bez rejestracji'} · VIN: ${protocol.vin || '—'}` : ''], fonts, settings);
   doc.y = 218;
   drawMeta(doc, [['Przebieg', protocol.mileage_in ? `${protocol.mileage_in} km` : '—'], ['Stan paliwa', protocol.fuel_level || '—'], ['Data dokumentu', new Date(protocol.created_at).toLocaleDateString('pl-PL')]], 45, 218, 505, fonts);
   doc.y = 270;
@@ -255,15 +254,22 @@ async function generateProtocolPdf(protocolId) {
     items.forEach((item) => {
       const t = lineTotals(item);
       const rowHeight = 24;
-      if (doc.y + rowHeight > 775) { addDocumentPage(doc, settings, fonts, footerText); drawTableHeader(doc, columns, settings, fonts); }
+      if (doc.y + rowHeight > 752) { addDocumentPage(doc, settings, fonts, footerText); drawTableHeader(doc, columns, settings, fonts); }
       const y = doc.y;
       const values = { description: item.description, quantity: String(item.quantity), unit: item.unit, net: pln(t.net), vatRate: `${item.vat_rate}%`, gross: pln(t.gross) };
       for (const col of columns) doc.font(fonts.regular).fontSize(8).fillColor('#303c47').text(values[col.key], col.x + 4, y + 7, { width: col.width - 8, align: col.align });
       doc.strokeColor('#e0e5e9').moveTo(45, y + rowHeight).lineTo(550, y + rowHeight).stroke();
       doc.y = y + rowHeight;
     });
-    doc.moveDown(0.5).font(fonts.regular).fontSize(9).fillColor('#55616d').text(`Razem netto: ${pln(totals.net)}   ·   VAT: ${pln(totals.vat)}`, { align: 'right' });
-    doc.font(fonts.bold).fontSize(11).fillColor(color(settings.document_accent_color, '#2563eb')).text(`Razem brutto: ${pln(totals.gross)}`, { align: 'right' });
+    const summaryY = doc.y + 10;
+    doc.strokeColor('#d7dde3').rect(340, summaryY, 210, 72).stroke();
+    doc.font(fonts.regular).fontSize(8.5).fillColor('#55616d').text('Razem netto', 352, summaryY + 9, { width: 90 });
+    doc.text('VAT', 352, summaryY + 27, { width: 90 });
+    doc.font(fonts.bold).fillColor('#26323d').text(pln(totals.net), 445, summaryY + 9, { width: 92, align: 'right' });
+    doc.text(pln(totals.vat), 445, summaryY + 27, { width: 92, align: 'right' });
+    doc.font(fonts.bold).fontSize(10).fillColor(color(settings.document_accent_color, '#2563eb')).text('Razem brutto', 352, summaryY + 49, { width: 100 });
+    doc.text(pln(totals.gross), 435, summaryY + 49, { width: 102, align: 'right' });
+    doc.y = summaryY + 82;
   }
 
   ensureSpace(doc, 110, settings, fonts, footerText);
@@ -275,8 +281,6 @@ async function generateProtocolPdf(protocolId) {
   doc.fontSize(7).fillColor('#697580').text('podpis klienta / odbierającego', 55, signatureY + 40, { width: 195, align: 'center' });
   doc.text('podpis pracownika warsztatu', 345, signatureY + 40, { width: 195, align: 'center' });
 
-  const range = doc.bufferedPageRange();
-  for (let i = range.start; i < range.start + range.count; i += 1) { doc.switchToPage(i); drawPageFooter(doc, settings, fonts, footerText); }
   await new Promise((resolve, reject) => {
     stream.on('finish', resolve); stream.on('error', reject); doc.on('error', reject); doc.end();
   });

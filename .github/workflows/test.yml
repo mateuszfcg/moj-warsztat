@@ -1,0 +1,33 @@
+name: Testy kodu
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    name: Testy i próbna budowa Docker
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pobranie kodu
+        uses: actions/checkout@v5
+
+      - name: Konfiguracja Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Instalacja zależności
+        run: npm ci
+
+      - name: Testy
+        run: npm test
+
+      - name: Próbna budowa obrazu Docker
+        run: docker build -t moj-warsztat:test .
