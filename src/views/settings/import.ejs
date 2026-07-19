@@ -1,0 +1,16 @@
+<%- include('../partials/header') %>
+<div class="page-head"><div><h1>Import i migracja danych</h1><p class="muted">Najpierw wyświetlany jest podgląd. Dane są zapisywane dopiero po potwierdzeniu importu.</p></div></div>
+<div class="two-col">
+<section class="card"><div class="card-head"><h2>Import EPP</h2></div>
+  <p>Importer odczytuje historyczne dokumenty z plików EPP i zapisuje je w oddzielnym archiwum migracyjnym. Opcjonalnie może utworzyć brakujące kartoteki kontrahentów.</p>
+  <form method="post" action="<%= basePath %>/settings/import/epp/preview" enctype="multipart/form-data" class="stack">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <label>Plik EPP<input type="file" name="epp_file" accept=".epp,text/plain,application/octet-stream" required></label>
+    <button class="button primary" type="submit">Wczytaj i pokaż podgląd</button>
+  </form>
+  <div class="notice warning" style="margin-top:14px">Pojazdy, VIN-y, zlecenia i pełna historia napraw wymagają osobnego eksportu źródłowego, jeżeli nie występują w pliku EPP.</div>
+</section>
+<section class="card"><div class="card-head"><h2>Plan pełnej migracji</h2></div><ol class="requirements"><li>Klienci i kontrahenci</li><li>Pojazdy z VIN i rejestracją</li><li>Zlecenia i pozycje</li><li>Protokoły i historia napraw</li><li>Faktury i korekty</li></ol><p class="muted small">Duplikaty pojazdów są sprawdzane po VIN i numerze rejestracyjnym, a klientów m.in. po NIP, e-mailu, telefonie i nazwie.</p></section>
+</div>
+<section class="card"><div class="card-head"><h2>Historia importów</h2></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Plik</th><th>Data</th><th>Dokumenty</th><th>Typy</th></tr></thead><tbody><% imports.forEach(row=>{ %><tr><td><strong><%= row.filename %></strong></td><td><%= formatDate(row.created_at) %></td><td><%= row.summary.total||0 %></td><td><%= Object.entries(row.summary.counts||{}).map(([k,v])=>k+': '+v).join(', ')||'—' %></td></tr><% }) %></tbody></table></div><% if(!imports.length){ %><p class="muted">Nie wykonano jeszcze żadnego importu.</p><% } %></section>
+<%- include('../partials/footer') %>

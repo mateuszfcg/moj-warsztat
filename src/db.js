@@ -157,6 +157,14 @@ CREATE TABLE IF NOT EXISTS app_settings (
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS document_sequences (
+  key TEXT PRIMARY KEY,
+  document_type TEXT NOT NULL,
+  period_key TEXT NOT NULL,
+  last_value INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS audit_logs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -343,6 +351,86 @@ ensureColumn('users', 'is_active', "INTEGER NOT NULL DEFAULT 1");
 ensureColumn('users', 'updated_at', "TEXT");
 db.exec("UPDATE users SET updated_at = COALESCE(updated_at, created_at, CURRENT_TIMESTAMP) WHERE updated_at IS NULL");
 ensureColumn('users', 'last_login_at', "TEXT");
+// 0.6.0 — rabaty, szkice faktur, korekty i wersjonowanie protokołów.
+ensureColumn('work_orders', 'discount_percent', "REAL NOT NULL DEFAULT 0");
+ensureColumn('invoices', 'discount_percent', "REAL NOT NULL DEFAULT 0");
+ensureColumn('invoices', 'receipt_number', "TEXT");
+ensureColumn('invoices', 'document_type', "TEXT NOT NULL DEFAULT 'invoice'");
+ensureColumn('invoices', 'corrected_invoice_id', "INTEGER");
+ensureColumn('protocols', 'updated_at', "TEXT");
+ensureColumn('protocols', 'version', "INTEGER NOT NULL DEFAULT 1");
+ensureColumn('protocols', 'number', "TEXT");
+ensureColumn('work_order_items', 'discount_percent', "REAL NOT NULL DEFAULT 0");
+ensureColumn('invoice_items', 'discount_percent', "REAL NOT NULL DEFAULT 0");
+ensureColumn('invoices', 'payment_days', "INTEGER NOT NULL DEFAULT 7");
+ensureColumn('users', 'position_id', "INTEGER");
+ensureColumn('users', 'commission_percent', "REAL NOT NULL DEFAULT 0");
+ensureColumn('users', 'monthly_cost', "REAL NOT NULL DEFAULT 0");
+ensureColumn('users', 'permissions_json', "TEXT NOT NULL DEFAULT '{}'");
+db.exec("UPDATE protocols SET updated_at = COALESCE(updated_at, created_at, CURRENT_TIMESTAMP) WHERE updated_at IS NULL");
+db.exec(`
+CREATE TABLE IF NOT EXISTS item_suggestions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  category TEXT NOT NULL,
+  value TEXT NOT NULL,
+  usage_count INTEGER NOT NULL DEFAULT 1,
+  last_used_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(category, value)
+);
+CREATE INDEX IF NOT EXISTS idx_item_suggestions_category_value ON item_suggestions(category, value);
+
+CREATE TABLE IF NOT EXISTS employee_positions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  description TEXT,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at TEXT NOT NULL,
+  used_at TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS document_templates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  document_type TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  config_json TEXT NOT NULL DEFAULT '{}',
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS legacy_imports (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  filename TEXT NOT NULL,
+  file_hash TEXT NOT NULL UNIQUE,
+  format TEXT NOT NULL DEFAULT 'epp',
+  summary_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS legacy_documents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  import_id INTEGER NOT NULL REFERENCES legacy_imports(id) ON DELETE CASCADE,
+  document_type TEXT,
+  document_number TEXT,
+  contractor_name TEXT,
+  contractor_nip TEXT,
+  issue_date TEXT,
+  net REAL NOT NULL DEFAULT 0,
+  vat REAL NOT NULL DEFAULT 0,
+  gross REAL NOT NULL DEFAULT 0,
+  raw_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_legacy_documents_number ON legacy_documents(document_number);
+`);
 
 // Migracja starszych baz: od wersji 0.5.0 zlecenie może istnieć bez klienta i pojazdu.
 // SQLite nie potrafi usunąć ograniczenia NOT NULL prostym ALTER TABLE, dlatego przebudowujemy
@@ -403,8 +491,31 @@ const defaultSettings = {
   invoice_show_unit: '1', invoice_show_net: '1', invoice_show_vat_rate: '1', invoice_show_vat_value: '1',
   invoice_show_gross: '1', invoice_footer: 'Dziękujemy za skorzystanie z usług naszego warsztatu.',
   protocol_footer: 'Dokument sporządzono w dwóch jednobrzmiących egzemplarzach.', protocol_show_order_items: '1',
-  protocol_show_gross_total: '1', protocol_show_net_total: '1', document_show_net_and_gross: '1', inventory_default_markup: '40', calendar_day_start: '08:00', calendar_day_end: '18:00', autopartner_customer_number: '', autopartner_integration_mode: 'manual', autopartner_catalog_url: 'https://apcat.eu/'
+  protocol_show_gross_total: '1', protocol_show_net_total: '1', document_show_net_and_gross: '1', inventory_default_markup: '40', calendar_day_start: '08:00', calendar_day_end: '18:00', autopartner_customer_number: '', autopartner_integration_mode: 'manual', autopartner_catalog_url: 'https://apcat.eu/',
+  protocol_legal_text: 'Klient potwierdza stan pojazdu i zakres zgłoszenia opisany w protokole. Wyraża zgodę na czynności diagnostyczne niezbędne do ustalenia zakresu naprawy oraz na jazdę próbną, jeżeli jest konieczna do diagnostyki lub weryfikacji naprawy. Koszty wykraczające poza zaakceptowany zakres wymagają dodatkowej akceptacji klienta. Warsztat nie odpowiada za przedmioty pozostawione w pojeździe, jeżeli nie zostały wskazane w protokole. Ujawnione w toku demontażu ukryte uszkodzenia lub usterki mogą wymagać zmiany zakresu i kosztu naprawy.',
+  default_payment_days: '7',
+  autodata_enabled: '0', tecrmi_enabled: '0', autodata_api_url: '', tecrmi_api_url: '',
+  update_check_url: '', update_command: '', document_templates_enabled: '1'
 };
+
+Object.assign(defaultSettings, {
+  document_font_family: 'dejavu', document_logo_x: '45', document_logo_y: '57', document_logo_width: '105', document_logo_height: '48',
+  document_title_x: '290', document_title_y: '58', document_title_width: '260',
+  document_seller_x: '45', document_seller_y: '116', document_seller_width: '247', document_seller_height: '88',
+  document_buyer_x: '303', document_buyer_y: '116', document_buyer_width: '247', document_buyer_height: '88',
+  document_meta_x: '45', document_meta_y: '220', document_meta_width: '250', document_bank_x: '303', document_bank_y: '220', document_bank_width: '247',
+  document_table_y: '286', document_custom_fields_json: '[]',
+  number_pattern_work_order: 'ZL/{YYYY}/{NNNN}', number_reset_work_order: 'year', number_prefix_work_order: 'ZL',
+  number_pattern_invoice: 'FV/{YYYY}/{NNNN}', number_reset_invoice: 'year', number_prefix_invoice: 'FV',
+  number_pattern_correction: 'KOR/{YYYY}/{NNNN}', number_reset_correction: 'year', number_prefix_correction: 'KOR',
+  number_pattern_invoice_receipt: 'FVP/{YYYY}/{NNNN}', number_reset_invoice_receipt: 'year', number_prefix_invoice_receipt: 'FVP',
+  number_pattern_protocol_intake: 'PP/{YYYY}/{NNNN}', number_reset_protocol_intake: 'year', number_prefix_protocol_intake: 'PP',
+  number_pattern_protocol_release: 'PW/{YYYY}/{NNNN}', number_reset_protocol_release: 'year', number_prefix_protocol_release: 'PW',
+  number_pattern_protocol_additional_costs: 'PDK/{YYYY}/{NNNN}', number_reset_protocol_additional_costs: 'year', number_prefix_protocol_additional_costs: 'PDK',
+  number_pattern_purchase_wz: 'WZ/{YYYY}/{NNNN}', number_reset_purchase_wz: 'year', number_prefix_purchase_wz: 'WZ',
+  number_pattern_purchase_pz: 'PZ/{YYYY}/{NNNN}', number_reset_purchase_pz: 'year', number_prefix_purchase_pz: 'PZ'
+});
+
 const insertSetting = db.prepare('INSERT OR IGNORE INTO app_settings (key,value) VALUES (?,?)');
 for (const [key,value] of Object.entries(defaultSettings)) insertSetting.run(key,value);
 
@@ -422,6 +533,16 @@ if (autoPartner) {
   insertCatalog.run(autoPartner.id, 'demo-1', 'AP-DEMO-001', 'Filtron', 'OP 520/1', 'Filtr oleju — pozycja demonstracyjna', 'Dane testowe', 22.50, 39.90, 23, 'szt.');
   insertCatalog.run(autoPartner.id, 'demo-2', 'AP-DEMO-002', 'Bosch', '0 986 494 596', 'Klocki hamulcowe — pozycja demonstracyjna', 'Dane testowe', 145.00, 229.00, 23, 'kpl.');
   insertCatalog.run(autoPartner.id, 'demo-3', 'AP-DEMO-003', 'MANN-FILTER', 'CUK 2939', 'Filtr kabinowy — pozycja demonstracyjna', 'Dane testowe', 52.00, 89.00, 23, 'szt.');
+}
+
+const insertPosition = db.prepare('INSERT OR IGNORE INTO employee_positions (name,description) VALUES (?,?)');
+insertPosition.run('Właściciel', 'Pełny dostęp do systemu i danych finansowych.');
+insertPosition.run('Doradca serwisowy', 'Obsługa klientów, pojazdów, zleceń i sprzedaży.');
+insertPosition.run('Mechanik', 'Realizacja zleceń i przypisanych zadań.');
+
+const insertTemplate = db.prepare(`INSERT OR IGNORE INTO document_templates (document_type,name,config_json) VALUES (?,?,?)`);
+for (const [type,name] of [['invoice','Faktura VAT'],['correction','Korekta'],['invoice_receipt','Faktura do paragonu'],['protocol_intake','Protokół przyjęcia'],['protocol_release','Protokół wydania'],['protocol_additional_costs','Dodatkowe koszty'],['public_acceptance','Publiczna akceptacja']]) {
+  insertTemplate.run(type, name, '{}');
 }
 
 const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(config.adminEmail.toLowerCase());

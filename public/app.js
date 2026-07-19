@@ -161,5 +161,113 @@
   storageClient?.addEventListener('change', syncStorageVehicles);
   syncStorageVehicles();
 
+  // Wyszukiwalne listy: wpisanie kilku liter filtruje widoczne opcje bez dodatkowej biblioteki.
+  all('select[data-searchable-select]').forEach(select => {
+    const search = document.createElement('input');
+    search.type = 'search'; search.className = 'select-search'; search.placeholder = 'Wpisz, aby wyszukać…'; search.autocomplete = 'off';
+    select.parentNode.insertBefore(search, select);
+    const options = [...select.options].map(option => ({ option, text: option.textContent.toLocaleLowerCase('pl') }));
+    const filter = () => {
+      const q = search.value.trim().toLocaleLowerCase('pl'); let matches = 0;
+      options.forEach(({ option, text }, index) => { const visible = index === 0 || !q || text.includes(q); option.hidden = !visible; if (visible) matches += 1; });
+      select.size = q ? Math.min(7, Math.max(2, matches)) : 1;
+      select.classList.toggle('searchable-select-open', Boolean(q));
+    };
+    search.addEventListener('input', filter);
+    select.addEventListener('change', () => { if (select.value) search.value = select.selectedOptions[0]?.textContent || ''; select.size = 1; select.classList.remove('searchable-select-open'); });
+    search.addEventListener('keydown', event => { if (event.key === 'ArrowDown') { select.focus(); if (select.options.length > 1) select.selectedIndex = Math.max(1, select.selectedIndex); } });
+  });
+
+  // Pola klienta/pojazdu mogą od razu otworzyć formularz dodawania nowej kartoteki.
+  all('select[data-create-panel]').forEach(select => {
+    const panel = one(select.dataset.createPanel);
+    const sync = () => { if (panel) panel.hidden = select.value !== '__new__'; };
+    select.addEventListener('change', sync); sync();
+  });
+
+  // Zmiana typu pozycji przełącza oddzielną bazę podpowiedzi usług/części/materiałów.
+  const itemDescription = one('#item-description');
+  const syncSuggestionList = () => {
+    if (!itemType || !itemDescription) return;
+    itemDescription.setAttribute('list', itemType.value === 'part' ? 'part-suggestions' : itemType.value === 'material' ? 'material-suggestions' : 'service-suggestions');
+  };
+  itemType?.addEventListener('change', syncSuggestionList); syncSuggestionList();
+
+  // Edycja pozycji faktury przed jej ostatecznym wystawieniem.
+  const invoiceTable = one('#invoice-items-table tbody');
+  const invoiceTemplate = one('#invoice-row-template');
+  one('[data-add-invoice-row]')?.addEventListener('click', () => {
+    if (!invoiceTable || !invoiceTemplate) return;
+    invoiceTable.appendChild(invoiceTemplate.content.cloneNode(true));
+    one('[data-empty-items]')?.remove();
+  });
+  document.addEventListener('click', event => {
+    const button = event.target.closest('[data-remove-row]');
+    if (button) button.closest('tr')?.remove();
+  });
+
+
+  // v0.8.0 — termin płatności i dynamiczne wiersze pozycji.
+  const invoiceForm = one('[data-invoice-form]');
+  if (invoiceForm) {
+    const issue = one('[data-invoice-issue-date]', invoiceForm);
+    const days = one('[data-payment-days]', invoiceForm);
+    const due = one('[data-invoice-due-date]', invoiceForm);
+    const method = one('[data-payment-method]', invoiceForm);
+    const syncDueDate = () => {
+      if (!issue || !due || !method) return;
+      const base = issue.value ? new Date(`${issue.value}T12:00:00`) : new Date();
+      const count = Math.max(0, Number(days?.value || 0));
+      if (method.value !== 'cash') base.setDate(base.getDate() + count);
+      const y=base.getFullYear(), m=String(base.getMonth()+1).padStart(2,'0'), d=String(base.getDate()).padStart(2,'0');
+      due.value = `${y}-${m}-${d}`;
+      if (method.value === 'cash' && days) days.value = 0;
+    };
+    issue?.addEventListener('change', syncDueDate); days?.addEventListener('input', syncDueDate); method?.addEventListener('change', syncDueDate);
+  }
+
+  all('[data-add-line-row]').forEach(button => button.addEventListener('click', () => {
+    const target = one(button.dataset.addLineRow);
+    const template = one(button.dataset.lineTemplate);
+    if (target && template) target.appendChild(template.content.cloneNode(true));
+  }));
+
+  // v0.7.0 — prosty wizualny edytor położenia bloków dokumentu PDF.
+  const designer = one('[data-document-designer] .designer-page');
+  if (designer) {
+    const coordinateInputs = Object.fromEntries(all('[data-designer-coordinate]').map(input => [input.dataset.designerCoordinate, input]));
+    const syncBlockFromInputs = (key) => {
+      const block = one(`[data-designer-block="${key}"]`, designer);
+      if (!block) return;
+      const x = coordinateInputs[`${key}-x`]; const y = coordinateInputs[`${key}-y`];
+      const width = coordinateInputs[`${key}-width`]; const height = coordinateInputs[`${key}-height`];
+      if (x) block.style.left = `${Number(x.value || 0)}px`;
+      if (y) block.style.top = `${Number(y.value || 0)}px`;
+      if (width) block.style.width = `${Number(width.value || 0)}px`;
+      if (height) block.style.height = `${Number(height.value || 0)}px`;
+    };
+    all('[data-designer-coordinate]').forEach(input => input.addEventListener('input', () => syncBlockFromInputs(input.dataset.designerCoordinate.split('-')[0])));
+
+    all('[data-designer-block]', designer).forEach(block => {
+      block.addEventListener('pointerdown', event => {
+        const key = block.dataset.designerBlock;
+        const xInput = coordinateInputs[`${key}-x`]; const yInput = coordinateInputs[`${key}-y`];
+        if (!xInput && !yInput) return;
+        event.preventDefault(); block.setPointerCapture(event.pointerId); block.classList.add('dragging');
+        const pageRect = designer.getBoundingClientRect();
+        const scaleX = 595 / pageRect.width; const scaleY = 842 / pageRect.height;
+        const startX = event.clientX; const startY = event.clientY;
+        const initialX = Number(xInput?.value || parseFloat(block.style.left) || 0);
+        const initialY = Number(yInput?.value || parseFloat(block.style.top) || 0);
+        const move = moveEvent => {
+          if (xInput) { const value = Math.max(0, Math.min(560, Math.round(initialX + (moveEvent.clientX - startX) * scaleX))); xInput.value = value; block.style.left = `${value}px`; }
+          if (yInput) { const value = Math.max(40, Math.min(760, Math.round(initialY + (moveEvent.clientY - startY) * scaleY))); yInput.value = value; block.style.top = `${value}px`; }
+        };
+        const up = () => { block.classList.remove('dragging'); block.removeEventListener('pointermove', move); block.removeEventListener('pointerup', up); block.removeEventListener('pointercancel', up); };
+        block.addEventListener('pointermove', move); block.addEventListener('pointerup', up); block.addEventListener('pointercancel', up);
+      });
+    });
+  }
+
   if (new URLSearchParams(window.location.search).get('new') === '1') openModal('order-modal');
 })();

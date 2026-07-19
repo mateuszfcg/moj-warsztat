@@ -27,6 +27,15 @@
     </form>
   </div>
 </header>
+<% if (currentPath !== "/modules" && currentPath !== "/" && !currentPath.startsWith("/settings")) { %>
+<nav class="quick-nav" aria-label="Szybka nawigacja">
+  <a class="<%= currentPath==='/modules'?'active':'' %>" href="<%= basePath %>/modules"><span class="quick-nav-icon">▦</span><span>Pulpit</span></a>
+  <a class="<%= currentPath.startsWith('/orders')?'active':'' %>" href="<%= basePath %>/orders"><span class="quick-nav-icon">ZL</span><span>Zlecenia</span></a>
+  <a class="<%= currentPath.startsWith('/vehicles')?'active':'' %>" href="<%= basePath %>/vehicles"><span class="quick-nav-icon">PO</span><span>Pojazdy</span></a>
+  <a class="<%= currentPath.startsWith('/clients')?'active':'' %>" href="<%= basePath %>/clients"><span class="quick-nav-icon">KL</span><span>Klienci</span></a>
+  <a class="<%= currentPath.startsWith('/invoices')?'active':'' %>" href="<%= basePath %>/invoices"><span class="quick-nav-icon">FV</span><span>Sprzedaż</span></a>
+</nav>
+<% } %>
 <div class="drawer-backdrop" data-drawer-backdrop hidden></div>
 <aside class="module-drawer" data-module-drawer aria-label="Moduły">
   <div class="drawer-head"><strong>Mój Warsztat</strong><button type="button" data-close-drawer>×</button></div>

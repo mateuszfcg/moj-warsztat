@@ -1,15 +1,90 @@
 <%- include('../partials/header') %>
-<div class="page-title"><div><h1>Wygląd faktur i dokumentów</h1><p>Wspólna identyfikacja faktur, protokołów przyjęcia i protokołów wydania.</p></div><a class="button" href="<%= basePath %>/settings">Wróć</a></div>
-<div class="settings-layout">
-  <div>
-    <form class="card" method="post" action="<%= basePath %>/settings/documents"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
-      <h2>Kolory i układ</h2><div class="form-grid"><label>Kolor przewodni<div class="color-row"><input name="document_accent_color" value="<%= formSettings.document_accent_color %>"><input type="color" value="<%= formSettings.document_accent_color %>" data-color-input="--doc-accent"></div></label><label>Nagłówek tabeli<div class="color-row"><input name="document_table_header_color" value="<%= formSettings.document_table_header_color %>"><input type="color" value="<%= formSettings.document_table_header_color %>" data-color-input="--doc-head"></div></label><label>Kolor tekstu tabeli<input name="document_table_text_color" type="color" value="<%= formSettings.document_table_text_color %>"></label><label>Rozmiar czcionki<input name="document_font_size" type="number" min="7" max="12" value="<%= formSettings.document_font_size %>"></label><label class="checkbox-row"><input type="checkbox" name="document_compact" value="1" <%= formSettings.document_compact?'checked':'' %>><span>Kompaktowe odstępy w tabelach</span></label><label class="checkbox-row"><input type="checkbox" name="document_show_logo" value="1" <%= formSettings.document_show_logo?'checked':'' %>><span>Pokazuj logo</span></label><label class="checkbox-row"><input type="checkbox" name="document_show_company_contact" value="1" <%= formSettings.document_show_company_contact?'checked':'' %>><span>Pokazuj dane kontaktowe</span></label></div>
-      <hr><h2>Kolumny faktury</h2><div class="form-grid"><% [['invoice_show_lp','Lp.'],['invoice_show_unit','Jednostka'],['invoice_show_vat_rate','Stawka VAT'],['invoice_show_vat_value','Kwota VAT']].forEach(([name,label])=>{ %><label class="checkbox-row"><input type="checkbox" name="<%= name %>" value="1" <%= formSettings[name]?'checked':'' %>><span><%= label %></span></label><% }) %><label class="checkbox-row locked"><input type="checkbox" checked disabled><span>Wartość netto (wymagana)</span></label><label class="checkbox-row locked"><input type="checkbox" checked disabled><span>Wartość brutto (wymagana)</span></label></div>
-      <hr><h2>Płatność i stopki</h2><div class="form-grid"><label class="checkbox-row span-2"><input type="checkbox" name="document_show_bank_account" value="1" <%= formSettings.document_show_bank_account?'checked':'' %>><span>Pokazuj rachunek bankowy na fakturze</span></label><label>Rachunek bankowy<input name="document_bank_account" value="<%= formSettings.document_bank_account %>"></label><label>Nazwa banku<input name="document_bank_name" value="<%= formSettings.document_bank_name %>"></label><label class="span-2">Stopka faktury<textarea name="invoice_footer" rows="3"><%= formSettings.invoice_footer %></textarea></label><label class="span-2">Stopka protokołów<textarea name="protocol_footer" rows="3"><%= formSettings.protocol_footer %></textarea></label><label class="checkbox-row"><input type="checkbox" name="protocol_show_order_items" value="1" <%= formSettings.protocol_show_order_items?'checked':'' %>><span>Pozycje zlecenia na protokołach</span></label><label class="checkbox-row locked"><input type="checkbox" checked disabled><span>Netto, VAT i brutto na protokołach (wymagane)</span></label></div>
-      <div class="form-actions"><button class="button primary" type="submit">Zapisz wygląd dokumentów</button></div>
-    </form>
+<div class="page-title">
+  <div><h1>Graficzny edytor dokumentów</h1><p>Każdy rodzaj dokumentu ma osobny szablon. Ustaw położenie bloków, logo, czcionkę, rachunek, BDO i własne pola.</p></div>
+  <div class="actions"><a class="button" href="<%= basePath %>/settings/documents/templates/<%= templateType %>/export">Eksportuj szablon</a><a class="button" href="<%= basePath %>/settings/numbering">Numeracja</a><a class="button" href="<%= basePath %>/settings">Wróć</a></div>
+</div>
+<section class="card template-switcher"><form method="get" action="<%= basePath %>/settings/documents" class="toolbar"><label>Edytowany dokument<select name="type" onchange="this.form.submit()"><% Object.entries(templateTypes).forEach(([key,labelText])=>{ %><option value="<%= key %>" <%= templateType===key?'selected':'' %>><%= labelText %></option><% }) %></select></label><span class="muted">Zmiana dokumentu przełącza niezależny układ.</span></form><form method="post" enctype="multipart/form-data" action="<%= basePath %>/settings/documents/templates/import" class="toolbar"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><input type="hidden" name="template_type" value="<%= templateType %>"><label>Import szablonu JSON<input type="file" name="template_file" accept="application/json,.json" required></label><button class="button">Importuj</button></form></section>
+
+<div class="document-editor-layout">
+  <form class="card document-editor-form" method="post" action="<%= basePath %>/settings/documents" id="document-editor-form">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <input type="hidden" name="template_type" value="<%= templateType %>">
+
+    <details open class="form-section"><summary><strong>1. Styl dokumentu</strong></summary>
+      <div class="form-grid editor-section-body">
+        <label>Kolor przewodni<div class="color-row"><input name="document_accent_color" value="<%= formSettings.document_accent_color %>"><input type="color" value="<%= formSettings.document_accent_color %>" data-color-input="--doc-accent"></div></label>
+        <label>Nagłówek tabeli<div class="color-row"><input name="document_table_header_color" value="<%= formSettings.document_table_header_color %>"><input type="color" value="<%= formSettings.document_table_header_color %>" data-color-input="--doc-head"></div></label>
+        <label>Kolor tekstu tabeli<input name="document_table_text_color" type="color" value="<%= formSettings.document_table_text_color %>"></label>
+        <label>Czcionka<select name="document_font_family"><option value="dejavu" <%= formSettings.document_font_family==='dejavu'?'selected':'' %>>DejaVu Sans</option><option value="helvetica" <%= formSettings.document_font_family==='helvetica'?'selected':'' %>>Helvetica</option><option value="times" <%= formSettings.document_font_family==='times'?'selected':'' %>>Times</option><option value="courier" <%= formSettings.document_font_family==='courier'?'selected':'' %>>Courier</option></select></label>
+        <label>Rozmiar tekstu tabeli<input name="document_font_size" type="number" min="7" max="12" value="<%= formSettings.document_font_size %>"></label>
+        <label class="checkbox-row"><input type="checkbox" name="document_compact" value="1" <%= formSettings.document_compact?'checked':'' %>><span>Kompaktowe odstępy</span></label>
+        <label class="checkbox-row"><input type="checkbox" name="document_show_logo" value="1" <%= formSettings.document_show_logo?'checked':'' %>><span>Pokazuj logo</span></label>
+        <label class="checkbox-row"><input type="checkbox" name="document_show_company_contact" value="1" <%= formSettings.document_show_company_contact?'checked':'' %>><span>Pokazuj telefon i e-mail firmy</span></label>
+      </div>
+    </details>
+
+    <details open class="form-section"><summary><strong>2. Położenie bloków na stronie A4</strong></summary>
+      <p class="small muted">Wartości X/Y są podane w punktach PDF. Możesz wpisać je ręcznie albo przeciągnąć bloki na podglądzie po prawej.</p>
+      <div class="layout-coordinate-grid editor-section-body">
+        <% const blocks = [
+          ['logo','Logo',formSettings.document_logo_x,formSettings.document_logo_y,formSettings.document_logo_width,formSettings.document_logo_height],
+          ['title','Tytuł / numer',formSettings.document_title_x,formSettings.document_title_y,formSettings.document_title_width,''],
+          ['seller','Sprzedawca / warsztat',formSettings.document_seller_x,formSettings.document_seller_y,formSettings.document_seller_width,formSettings.document_seller_height],
+          ['buyer','Nabywca / klient i pojazd',formSettings.document_buyer_x,formSettings.document_buyer_y,formSettings.document_buyer_width,formSettings.document_buyer_height],
+          ['meta','Daty i informacje',formSettings.document_meta_x,formSettings.document_meta_y,formSettings.document_meta_width,''],
+          ['bank','Rachunek bankowy',formSettings.document_bank_x,formSettings.document_bank_y,formSettings.document_bank_width,'']
+        ]; %>
+        <% blocks.forEach(([key,labelText,x,y,w,h])=>{ %>
+          <div class="coordinate-card"><strong><%= labelText %></strong><div class="coordinate-fields">
+            <label>X<input type="number" name="document_<%= key %>_x" value="<%= x %>" data-designer-coordinate="<%= key %>-x"></label>
+            <label>Y<input type="number" name="document_<%= key %>_y" value="<%= y %>" data-designer-coordinate="<%= key %>-y"></label>
+            <label>Szer.<input type="number" name="document_<%= key %>_width" value="<%= w %>" data-designer-coordinate="<%= key %>-width"></label>
+            <% if(h!==''){ %><label>Wys.<input type="number" name="document_<%= key %>_height" value="<%= h %>" data-designer-coordinate="<%= key %>-height"></label><% } %>
+          </div></div>
+        <% }) %>
+        <div class="coordinate-card"><strong>Początek tabeli pozycji</strong><div class="coordinate-fields"><label>Y<input type="number" min="120" max="700" name="document_table_y" value="<%= formSettings.document_table_y %>" data-designer-coordinate="table-y"></label></div></div>
+      </div>
+    </details>
+
+    <details class="form-section"><summary><strong>3. Własne pola tekstowe</strong></summary>
+      <p class="small muted">Możesz dodać np. BDO, dodatkowy numer rachunku, informacje prawne lub dowolny tekst. Dostępne znaczniki: {FIRMA}, {NIP}, {ADRES_FIRMY}, {EMAIL_FIRMY}, {TELEFON_FIRMY}, {RACHUNEK}, {BANK}, {NUMER}, {KLIENT}, {POJAZD}.</p>
+      <div class="custom-fields-table-wrap editor-section-body"><table class="data-table compact custom-fields-table"><thead><tr><th>Etykieta</th><th>Treść</th><th>Dokument</th><th>X</th><th>Y</th><th>Szer.</th><th>Rozm.</th><th>Styl</th></tr></thead><tbody>
+        <% const customRows = [...(formSettings.document_custom_fields||[])]; while(customRows.length<8) customRows.push({}); customRows.slice(0,10).forEach(field=>{ %>
+          <tr><td><input name="custom_field_label" value="<%= field.label||'' %>" placeholder="np. BDO"></td><td><input name="custom_field_value" value="<%= field.value||'' %>" placeholder="np. 000012345"></td><td><select name="custom_field_document_type"><option value="all" <%= !field.document_type||field.document_type==='all'?'selected':'' %>>Wszystkie</option><option value="invoice" <%= field.document_type==='invoice'?'selected':'' %>>Faktura</option><option value="correction" <%= field.document_type==='correction'?'selected':'' %>>Korekta</option><option value="invoice_receipt" <%= field.document_type==='invoice_receipt'?'selected':'' %>>FV do paragonu</option><option value="protocol" <%= field.document_type==='protocol'?'selected':'' %>>Protokoły</option></select></td><td><input type="number" name="custom_field_x" value="<%= field.x||45 %>"></td><td><input type="number" name="custom_field_y" value="<%= field.y||700 %>"></td><td><input type="number" name="custom_field_width" value="<%= field.width||240 %>"></td><td><input type="number" min="6" max="14" name="custom_field_font_size" value="<%= field.font_size||8 %>"></td><td><select name="custom_field_weight"><option value="regular" <%= field.bold?'':'selected' %>>Zwykły</option><option value="bold" <%= field.bold?'selected':'' %>>Pogrubiony</option></select></td></tr>
+        <% }) %>
+      </tbody></table></div>
+    </details>
+
+    <details class="form-section"><summary><strong>4. Faktura — kolumny, płatność i stopki</strong></summary>
+      <div class="form-grid editor-section-body">
+        <% [['invoice_show_lp','Lp.'],['invoice_show_unit','Jednostka'],['invoice_show_vat_rate','Stawka VAT'],['invoice_show_vat_value','Kwota VAT']].forEach(([name,labelText])=>{ %><label class="checkbox-row"><input type="checkbox" name="<%= name %>" value="1" <%= formSettings[name]?'checked':'' %>><span><%= labelText %></span></label><% }) %>
+        <label class="checkbox-row locked"><input type="checkbox" checked disabled><span>Wartość netto</span></label><label class="checkbox-row locked"><input type="checkbox" checked disabled><span>Wartość brutto</span></label>
+        <label class="checkbox-row span-2"><input type="checkbox" name="document_show_bank_account" value="1" <%= formSettings.document_show_bank_account?'checked':'' %>><span>Pokazuj rachunek bankowy</span></label>
+        <label>Rachunek bankowy<input name="document_bank_account" value="<%= formSettings.document_bank_account %>"></label><label>Nazwa banku<input name="document_bank_name" value="<%= formSettings.document_bank_name %>"></label>
+        <label class="span-2">Stopka faktury<textarea name="invoice_footer" rows="3"><%= formSettings.invoice_footer %></textarea></label>
+        <label class="span-2">Stopka protokołów<textarea name="protocol_footer" rows="3"><%= formSettings.protocol_footer %></textarea></label>
+        <label class="checkbox-row"><input type="checkbox" name="protocol_show_order_items" value="1" <%= formSettings.protocol_show_order_items?'checked':'' %>><span>Pozycje zlecenia na protokołach</span></label>
+      </div>
+    </details>
+    <div class="form-actions sticky-actions"><button class="button primary" type="submit">Zapisz projekt dokumentów</button></div>
+  </form>
+
+  <div class="document-preview-column">
+    <div class="card"><h2>Podgląd i przeciąganie</h2><p class="small muted">Przeciągnij blok. Pozycje X/Y zapiszą się w formularzu.</p>
+      <div class="designer-stage" data-document-designer>
+        <div class="designer-page" style="--doc-accent:<%= formSettings.document_accent_color %>;--doc-head:<%= formSettings.document_table_header_color %>">
+          <div class="designer-accent"></div>
+          <div class="designer-block logo-block" data-designer-block="logo" style="left:<%= formSettings.document_logo_x %>px;top:<%= formSettings.document_logo_y %>px;width:<%= formSettings.document_logo_width %>px;height:<%= formSettings.document_logo_height %>px">LOGO</div>
+          <div class="designer-block title-block" data-designer-block="title" style="left:<%= formSettings.document_title_x %>px;top:<%= formSettings.document_title_y %>px;width:<%= formSettings.document_title_width %>px">FAKTURA VAT<br><small>FV/2026/0001</small></div>
+          <div class="designer-block box-block" data-designer-block="seller" style="left:<%= formSettings.document_seller_x %>px;top:<%= formSettings.document_seller_y %>px;width:<%= formSettings.document_seller_width %>px;height:<%= formSettings.document_seller_height %>px"><strong>SPRZEDAWCA</strong><br><%= company.name %><br><small><%= company.address %></small></div>
+          <div class="designer-block box-block" data-designer-block="buyer" style="left:<%= formSettings.document_buyer_x %>px;top:<%= formSettings.document_buyer_y %>px;width:<%= formSettings.document_buyer_width %>px;height:<%= formSettings.document_buyer_height %>px"><strong>NABYWCA</strong><br>Przykładowy klient<br><small>NIP: 1234567890</small></div>
+          <div class="designer-block meta-block" data-designer-block="meta" style="left:<%= formSettings.document_meta_x %>px;top:<%= formSettings.document_meta_y %>px;width:<%= formSettings.document_meta_width %>px">Data wystawienia: 18.07.2026<br>Termin: 25.07.2026</div>
+          <div class="designer-block meta-block" data-designer-block="bank" style="left:<%= formSettings.document_bank_x %>px;top:<%= formSettings.document_bank_y %>px;width:<%= formSettings.document_bank_width %>px">Rachunek: <%= formSettings.document_bank_account||'00 0000 0000...' %></div>
+          <div class="designer-table-preview" data-designer-block="table" style="top:<%= formSettings.document_table_y %>px"><div>Nazwa towaru / usługi</div><div>Ilość</div><div>Netto</div><div>VAT</div><div>Brutto</div></div>
+        </div>
+      </div>
+    </div>
     <form class="card" method="post" enctype="multipart/form-data" action="<%= basePath %>/settings/documents/logo"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><h2>Logo</h2><label>Plik JPG lub PNG<input type="file" name="logo" accept="image/jpeg,image/png" required></label><% if(formSettings.document_logo_path){ %><p class="small muted">Aktualny plik: <%= formSettings.document_logo_path %></p><% } %><div class="form-actions"><button class="button" type="submit">Wgraj logo</button></div></form>
   </div>
-  <div class="preview-document" style="--doc-accent:<%= formSettings.document_accent_color %>;--doc-head:<%= formSettings.document_table_header_color %>"><div class="preview-doc-head"><div class="preview-logo">LOGO</div><div class="preview-title"><strong>FAKTURA VAT</strong><span>FV/2026/0001</span></div></div><div class="preview-parties"><div class="preview-box"><strong>Sprzedawca</strong><br><%= company.name %><br><%= company.address %><br>NIP: <%= company.nip||'—' %></div><div class="preview-box"><strong>Nabywca</strong><br>Przykładowy klient<br>ul. Klienta 1<br>NIP: 1234567890</div></div><table class="preview-table"><thead><tr><% if(formSettings.invoice_show_lp){ %><th>Lp.</th><% } %><th>Nazwa</th><th>Ilość</th><% if(formSettings.invoice_show_unit){ %><th>J.m.</th><% } %><th>Netto</th><% if(formSettings.invoice_show_vat_rate){ %><th>VAT</th><% } %><% if(formSettings.invoice_show_vat_value){ %><th>Kwota VAT</th><% } %><th>Brutto</th></tr></thead><tbody><tr><% if(formSettings.invoice_show_lp){ %><td>1</td><% } %><td>Usługa serwisowa</td><td>1,50</td><% if(formSettings.invoice_show_unit){ %><td>rbh</td><% } %><td>300,00</td><% if(formSettings.invoice_show_vat_rate){ %><td>23%</td><% } %><% if(formSettings.invoice_show_vat_value){ %><td>69,00</td><% } %><td>369,00</td></tr></tbody></table><div class="preview-total">Do zapłaty: 369,00 zł</div><p class="small muted" style="margin-top:26px"><%= formSettings.invoice_footer %></p></div>
 </div>
 <%- include('../partials/footer') %>

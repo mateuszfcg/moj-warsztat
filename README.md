@@ -2,7 +2,7 @@
 
 Self-hosted aplikacja do obsługi warsztatu samochodowego.
 
-Aktualna wersja: **0.5.2**.
+Aktualna wersja: **0.8.0**.
 
 ## Najważniejsze moduły
 
@@ -17,6 +17,29 @@ Aktualna wersja: **0.5.2**.
 - kasa i raporty z zakresem dat,
 - raporty PDF, Excel oraz widok do druku w nowym oknie,
 - aktualizacje z GHCR z backupem i automatycznym rollbackiem.
+
+
+## Nowości 0.8.0
+
+- pozycje faktur i zleceń edytowane bez osobnych okien, z rabatem na każdej pozycji,
+- automatyczne zakończenie zlecenia po wystawieniu powiązanej faktury,
+- terminy płatności w dniach i automatyczny termin „dzisiaj” dla gotówki,
+- edytowalne stanowiska pracowników i warsztatu oraz rozbudowane role i uprawnienia,
+- raporty miesięczne i dodatkowe filtry,
+- osobne szablony dokumentów z importem i eksportem JSON,
+- podgląd i import archiwalnych dokumentów EPP,
+- ekran wersji i bezpiecznie konfigurowanej aktualizacji,
+- przygotowanie integracji Auto Partner, Autodata i TecRMI.
+
+## Nowości 0.7.0
+
+- wizualny edytor układu dokumentów PDF z pozycjonowaniem bloków X/Y i przeciąganiem w podglądzie,
+- wybór czcionki oraz rozmiaru tekstu,
+- własne pola tekstowe, np. BDO, dodatkowe dane firmy i informacje prawne, z możliwością wskazania miejsca na dokumencie,
+- dynamiczne znaczniki w polach własnych, m.in. numer dokumentu, klient, pojazd i rachunek bankowy,
+- konfigurowalna numeracja zleceń, faktur, korekt, faktur do paragonu, protokołów i dokumentów magazynowych,
+- zerowanie numeracji miesięczne, roczne lub numeracja ciągła,
+- osobne numery dla nowo tworzonych protokołów.
 
 ## Tryb developerski
 
@@ -35,7 +58,7 @@ Najważniejsze komendy:
 
 ```bash
 sudo moj-warsztat-update
-sudo moj-warsztat-update 0.5.2
+sudo moj-warsztat-update 0.8.0
 sudo moj-warsztat-rollback
 sudo moj-warsztat-version
 sudo moj-warsztat-backup

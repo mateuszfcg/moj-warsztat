@@ -1,10 +1,24 @@
 <%- include('../partials/header') %>
+<div class="page-head"><div><h1>Ustawienia</h1><p class="muted">Konfiguracja aplikacji, dokumentów, warsztatu i integracji. Linki w tej sekcji prowadzą wyłącznie do ekranów ustawień.</p></div></div>
 <section class="settings-grid">
-  <div class="settings-group"><h2>Ogólne</h2><div class="settings-links"><% if (currentUser.role === 'owner') { %><a href="<%= basePath %>/settings/users">Użytkownicy i uprawnienia</a><% } %><a href="<%= basePath %>/settings/documents">Wygląd dokumentów</a><a href="<%= basePath %>/settings/documents">Dane na fakturach</a><a href="<%= basePath %>/settings/documents">Stopki i tabele</a><a href="<%= basePath %>/audit">Historia zmian</a></div></div>
-  <div class="settings-group"><h2>Warsztat</h2><div class="settings-links"><a href="<%= basePath %>/settings/workshop">Stawki warsztatowe i RBH</a><a href="<%= basePath %>/orders">Zlecenia</a><a href="<%= basePath %>/tasks">Zadania</a><a href="<%= basePath %>/clients">Klienci</a><a href="<%= basePath %>/vehicles">Pojazdy</a></div></div>
-  <div class="settings-group"><h2>Terminarz</h2><div class="settings-links"><a href="<%= basePath %>/calendar">Kalendarz dzienny</a><a href="<%= basePath %>/calendar">Stanowiska warsztatowe</a><a href="<%= basePath %>/tasks">Planowane zadania</a></div></div>
-  <div class="settings-group"><h2>Sprzedaż i kasa</h2><div class="settings-links"><a href="<%= basePath %>/invoices">Dokumenty sprzedaży</a><a href="<%= basePath %>/settings/documents">Szablon faktury</a><a href="<%= basePath %>/cash">Operacje kasowe</a></div></div>
-  <div class="settings-group"><h2>Magazyn i zakupy</h2><div class="settings-links"><a href="<%= basePath %>/inventory">Towary i stany</a><a href="<%= basePath %>/purchases">Zakupy i WZ</a><a href="<%= basePath %>/catalog">Katalog części</a><a href="<%= basePath %>/storage">Przechowalnia</a></div></div>
-  <div class="settings-group"><h2>Integracje</h2><div class="settings-links"><a href="<%= basePath %>/settings/integrations">Auto Partner / AP CAT</a><a href="<%= basePath %>/invoices">KSeF</a><a href="<%= basePath %>/settings/documents">E-mail dokumentów</a></div></div>
+  <div class="settings-group"><h2>Ogólne</h2><div class="settings-links">
+    <% if (currentUser.role === 'owner') { %><a href="<%= basePath %>/settings/users">Użytkownicy i uprawnienia</a><a href="<%= basePath %>/settings/positions">Stanowiska i zasoby warsztatowe</a><% } %>
+    <a href="<%= basePath %>/settings/workshop">Stawki, zlecenia i protokoły</a>
+    <a href="<%= basePath %>/settings/numbering">Numeracja dokumentów</a>
+    <a href="<%= basePath %>/audit">Historia zmian</a>
+  </div></div>
+  <div class="settings-group"><h2>Dokumenty</h2><div class="settings-links">
+    <a href="<%= basePath %>/settings/documents?type=invoice">Faktura VAT</a>
+    <a href="<%= basePath %>/settings/documents?type=correction">Faktura korygująca</a>
+    <a href="<%= basePath %>/settings/documents?type=invoice_receipt">Faktura do paragonu</a>
+    <a href="<%= basePath %>/settings/documents?type=protocol_intake">Protokół przyjęcia</a>
+    <a href="<%= basePath %>/settings/documents?type=protocol_release">Protokół wydania</a>
+    <a href="<%= basePath %>/settings/documents?type=protocol_additional_costs">Dodatkowe koszty</a>
+    <a href="<%= basePath %>/settings/documents?type=public_acceptance">Publiczna akceptacja</a>
+  </div></div>
+  <div class="settings-group"><h2>Integracje</h2><div class="settings-links">
+    <a href="<%= basePath %>/settings/integrations">Auto Partner / Autodata / TecRMI</a>
+    <% if (currentUser.role === 'owner') { %><a href="<%= basePath %>/settings/import">Import i migracja danych</a><a href="<%= basePath %>/settings/updates">Wersja i aktualizacje</a><% } %>
+  </div></div>
 </section>
 <%- include('../partials/footer') %>

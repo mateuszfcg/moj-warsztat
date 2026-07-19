@@ -1,15 +1,19 @@
 <%- include('../partials/header') %>
-<div class="page-head"><div><h1><%= title %></h1></div><a class="button" href="<%= basePath %><%= order.id ? '/orders/' + order.id : '/orders' %>">Anuluj</a></div>
-<form class="card form-grid" method="post" action="<%= basePath %><%= action %>">
+<div class="page-head"><div><div class="eyebrow">Zlecenie</div><h1><%= title %></h1><p class="muted">Klient i pojazd są wybierane niezależnie. Możesz też utworzyć nowe kartoteki bez opuszczania formularza.</p></div><div class="actions"><button class="button" type="button" onclick="window.print()">Drukuj</button><a class="button" href="<%= basePath %>/orders/<%= order.id %>">Anuluj</a></div></div>
+<form class="card stack" method="post" action="<%= basePath %><%= action %>">
 <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-<label class="span-2">Klient i pojazd<select name="vehicle_id"><option value="">Bez klienta i pojazdu</option><% vehicles.forEach(v => { %><option value="<%= v.id %>" <%= String(order.vehicle_id) === String(v.id) ? 'selected' : '' %>><%= v.client_name %> — <%= v.registration || 'bez rejestracji' %> · <%= v.make || '' %> <%= v.model || '' %></option><% }) %></select></label>
-<label>Status<select name="status"><% ['draft','estimate','approved','in_progress','ready','completed','cancelled'].forEach(s => { %><option value="<%= s %>" <%= (order.status || 'draft') === s ? 'selected' : '' %>><%= orderStatuses[s]||s %></option><% }) %></select></label>
-<label>Przebieg przy przyjęciu<input name="mileage_in" type="number" min="0" value="<%= order.mileage_in || '' %>"></label>
-<label>Stan paliwa<select name="fuel_level"><option value="">—</option><% ['rezerwa','1/4','1/2','3/4','pełny'].forEach(s => { %><option <%= order.fuel_level === s ? 'selected' : '' %>><%= s %></option><% }) %></select></label>
-<label>Planowany termin<input name="scheduled_for" type="date" value="<%= order.scheduled_for ? String(order.scheduled_for).slice(0,10) : '' %>"></label>
-<label class="span-3">Zgłoszenie klienta<textarea name="complaint" rows="4"><%= order.complaint || '' %></textarea></label>
-<label class="span-3">Diagnoza<textarea name="diagnosis" rows="4"><%= order.diagnosis || '' %></textarea></label>
-<label class="span-3">Notatki wewnętrzne<textarea name="notes" rows="3"><%= order.notes || '' %></textarea></label>
-<div class="span-3 form-actions"><button class="button primary" type="submit">Zapisz zlecenie</button></div>
-</form>
+<div class="form-section"><div class="form-section-title">Klient i pojazd</div><div class="form-grid three">
+<label>Klient<select name="client_id" data-searchable-select data-create-panel="#edit-new-client"><option value="">Bez klienta</option><option value="__new__">＋ Dodaj nowego klienta</option><% clients.forEach(c=>{ %><option value="<%= c.id %>" <%= String(order.client_id||'')===String(c.id)?'selected':'' %>><%= c.name %><%= c.nip?' · NIP '+c.nip:'' %></option><% }) %></select></label>
+<label class="span-2">Pojazd<select name="vehicle_id" data-searchable-select data-create-panel="#edit-new-vehicle"><option value="">Bez pojazdu</option><option value="__new__">＋ Dodaj nowy pojazd</option><% vehicles.forEach(v=>{ %><option value="<%= v.id %>" <%= String(order.vehicle_id||'')===String(v.id)?'selected':'' %>><%= v.registration||'bez rejestracji' %> · <%= v.make||'' %> <%= v.model||'' %> — <%= v.client_name %></option><% }) %></select></label>
+</div></div>
+<div class="form-section inline-create-panel" id="edit-new-client" hidden><div class="form-section-title">Nowy klient</div><div class="form-grid three" style="margin-top:10px"><label>Typ<select name="new_client_type"><option value="person">Osoba</option><option value="company">Firma</option></select></label><label class="span-2">Nazwa / imię i nazwisko<input name="new_client_name"></label><label>NIP<input name="new_client_nip"></label><label>Telefon<input name="new_client_phone"></label><label>E-mail<input name="new_client_email" type="email"></label><label class="span-3">Adres<input name="new_client_address"></label></div><p class="muted">Wypełnienie nazwy utworzy nowego klienta i przypisze go do zlecenia.</p></div>
+<div class="form-section inline-create-panel" id="edit-new-vehicle" hidden><div class="form-section-title">Nowy pojazd</div><div class="form-grid three" style="margin-top:10px"><label>Rejestracja<input name="new_vehicle_registration"></label><label class="span-2">VIN<input name="new_vehicle_vin" maxlength="17"></label><label>Marka<input name="new_vehicle_make"></label><label>Model<input name="new_vehicle_model"></label><label>Rok<input name="new_vehicle_year" type="number"></label><label>Silnik<input name="new_vehicle_engine"></label><label>Paliwo<input name="new_vehicle_fuel"></label></div><p class="muted">Nowy pojazd zostanie przypisany do klienta wybranego wyżej albo klienta tworzonego w tym formularzu.</p></div>
+<div class="form-section"><div class="form-section-title">Dane zlecenia</div><div class="form-grid three">
+<label>Status<select name="status"><% ['draft','estimate','approved','in_progress','ready','completed','cancelled'].forEach(s=>{ %><option value="<%= s %>" <%= (order.status||'draft')===s?'selected':'' %>><%= orderStatuses[s]||s %></option><% }) %></select></label>
+<label>Przebieg przy przyjęciu<input name="mileage_in" type="number" min="0" value="<%= order.mileage_in||'' %>"></label>
+
+<label>Stan paliwa<select name="fuel_level"><option value="">—</option><% ['rezerwa','1/4','1/2','3/4','pełny'].forEach(s=>{ %><option value="<%= s %>" <%= order.fuel_level===s?'selected':'' %>><%= s %></option><% }) %></select></label>
+<label>Planowany termin<input name="scheduled_for" type="date" value="<%= order.scheduled_for?String(order.scheduled_for).slice(0,10):'' %>"></label>
+<label class="span-3">Zgłoszenie klienta<textarea name="complaint" rows="4"><%= order.complaint||'' %></textarea></label><label class="span-3">Diagnoza<textarea name="diagnosis" rows="4"><%= order.diagnosis||'' %></textarea></label><label class="span-3">Notatki wewnętrzne<textarea name="notes" rows="3"><%= order.notes||'' %></textarea></label>
+</div></div><div class="form-actions"><button class="button primary" type="submit">Zapisz zlecenie</button></div></form>
 <%- include('../partials/footer') %>

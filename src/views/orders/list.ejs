@@ -22,34 +22,19 @@
 </section>
 
 <div class="modal" id="order-modal" hidden>
-  <form class="modal-card wide" method="post" action="<%= basePath %>/orders" data-choice-group>
+  <form class="modal-card wide" method="post" action="<%= basePath %>/orders">
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
     <div class="modal-head"><h2>Nowe zlecenie</h2><button class="modal-close" type="button" data-close-modal>×</button></div>
     <div class="modal-body">
-      <div class="radio-tabs">
-        <label class="radio-tab"><input type="radio" name="creation_mode" value="standalone" checked><span>Bez klienta i pojazdu</span></label><label class="radio-tab"><input type="radio" name="creation_mode" value="existing_vehicle"><span>Istniejący pojazd</span></label>
-        <label class="radio-tab"><input type="radio" name="creation_mode" value="new_vehicle"><span>Nowy pojazd klienta</span></label>
-        <label class="radio-tab"><input type="radio" name="creation_mode" value="new_client_vehicle"><span>Nowy klient i pojazd</span></label>
+      <div class="form-section"><div class="form-section-title">Klient i pojazd</div><p class="muted small">Zacznij wpisywać nazwę, rejestrację albo VIN. Gdy kartoteki nie ma, wybierz pierwszą opcję „+ Dodaj…”. Możesz też zostawić oba pola puste.</p>
+        <div class="form-grid">
+          <label>Klient<select name="client_id" data-searchable-select data-create-panel="#new-order-client"><option value="">Bez klienta</option><option value="__new__">＋ Dodaj nowego klienta</option><% clients.forEach(c=>{ %><option value="<%= c.id %>"><%= c.name %></option><% }) %></select></label>
+          <label>Pojazd<select name="vehicle_id" data-searchable-select data-create-panel="#new-order-vehicle"><option value="">Bez pojazdu</option><option value="__new__">＋ Dodaj nowy pojazd</option><% vehicles.forEach(v=>{ %><option value="<%= v.id %>"><%= v.registration||'bez rejestracji' %> · <%= v.make||'' %> <%= v.model||'' %> — <%= v.client_name %></option><% }) %></select></label>
+        </div>
       </div>
-      <div class="form-section" data-choice-panel="standalone" style="margin-top:12px"><div class="form-section-title">Zlecenie robocze</div><div class="notice">Zlecenie zostanie utworzone bez klienta i bez pojazdu. Kartotekę możesz przypisać później podczas edycji zlecenia.</div></div>
-      <div class="form-section" data-choice-panel="existing_vehicle" style="margin-top:12px">
-        <div class="form-section-title">Wybór kartoteki</div>
-        <label>Pojazd<select name="vehicle_id"><option value="">Wybierz klienta i pojazd</option><% vehicles.forEach(v=>{ %><option value="<%= v.id %>"><%= v.client_name %> — <%= v.registration||'bez rejestracji' %> · <%= v.make||'' %> <%= v.model||'' %></option><% }) %></select></label>
-      </div>
-      <div class="form-section" data-choice-panel="new_vehicle" hidden style="margin-top:12px">
-        <div class="form-section-title">Klient istniejący</div>
-        <label>Klient<select name="client_id"><option value="">Wybierz klienta</option><% clients.forEach(c=>{ %><option value="<%= c.id %>"><%= c.name %></option><% }) %></select></label>
-      </div>
-      <div class="form-section" data-choice-panel="new_client_vehicle" hidden style="margin-top:12px">
-        <div class="form-section-title">Nowy klient</div>
-        <div class="form-grid three"><label>Typ<select name="client_type"><option value="person">Osoba</option><option value="company">Firma</option></select></label><label class="span-2">Nazwa / imię i nazwisko<input name="client_name"></label><label>NIP<input name="client_nip"></label><label>Telefon<input name="client_phone"></label><label>E-mail<input name="client_email" type="email"></label><label class="span-3">Adres<input name="client_address"></label></div>
-      </div>
-      <div class="form-section" data-choice-panel="new_vehicle,new_client_vehicle" hidden style="margin-top:12px">
-        <div class="form-section-title">Nowy pojazd</div>
-        <div class="form-grid three"><label>Rejestracja<input name="vehicle_registration" autocomplete="off"></label><label class="span-2">VIN<input name="vehicle_vin" maxlength="17" autocomplete="off"></label><label>Marka<input name="vehicle_make"></label><label>Model<input name="vehicle_model"></label><label>Rok<input name="vehicle_year" type="number"></label><label>Silnik<input name="vehicle_engine"></label><label>Paliwo<input name="vehicle_fuel"></label><label>Kolor<input name="vehicle_color"></label></div>
-        <div style="display:flex;gap:8px;margin-top:8px"><button class="button" id="decode-vin" type="button">Rozpoznaj VIN</button></div><div id="vin-result" class="notice hidden" style="margin-top:8px"></div>
-      </div>
-      <div class="form-section" style="margin-top:12px"><div class="form-section-title">Dane zlecenia</div><div class="form-grid three"><label>Status<select name="status"><% Object.entries(statusLabels).forEach(([key,label])=>{ %><option value="<%= key %>"><%= label %></option><% }) %></select></label><label>Planowane przyjęcie<input name="scheduled_for" type="datetime-local"></label><label>Przebieg<input name="mileage_in" type="number" min="0"></label><label>Stan paliwa<select name="fuel_level"><option value="">—</option><option>Rezerwa</option><option>1/4</option><option>1/2</option><option>3/4</option><option>Pełny</option></select></label><label>Domyślny widok cen<select name="price_mode"><option value="net" <%= settings.default_price_mode==='net'?'selected':'' %>>Netto</option><option value="gross" <%= settings.default_price_mode==='gross'?'selected':'' %>>Brutto</option></select></label><label class="span-3">Zgłoszenie klienta<textarea name="complaint" rows="3"></textarea></label><label class="span-3">Notatki wewnętrzne<textarea name="notes" rows="2"></textarea></label></div></div>
+      <div class="form-section inline-create-panel" id="new-order-client" hidden><div class="form-section-title">Nowy klient</div><div class="form-grid three"><label>Typ<select name="new_client_type"><option value="person">Osoba</option><option value="company">Firma</option></select></label><label class="span-2">Nazwa / imię i nazwisko<input name="new_client_name"></label><label>NIP<input name="new_client_nip"></label><label>Telefon<input name="new_client_phone"></label><label>E-mail<input name="new_client_email" type="email"></label><label class="span-3">Adres<input name="new_client_address"></label></div></div>
+      <div class="form-section inline-create-panel" id="new-order-vehicle" hidden><div class="form-section-title">Nowy pojazd</div><div class="form-grid three"><label>Rejestracja<input name="new_vehicle_registration" autocomplete="off"></label><label class="span-2">VIN<input name="new_vehicle_vin" maxlength="17" autocomplete="off"></label><label>Marka<input name="new_vehicle_make"></label><label>Model<input name="new_vehicle_model"></label><label>Rok<input name="new_vehicle_year" type="number"></label><label>Silnik<input name="new_vehicle_engine"></label><label>Paliwo<input name="new_vehicle_fuel"></label><label>Kolor<input name="new_vehicle_color"></label></div></div>
+      <div class="form-section"><div class="form-section-title">Dane zlecenia</div><div class="form-grid three"><label>Status<select name="status"><% Object.entries(statusLabels).forEach(([key,label])=>{ %><option value="<%= key %>"><%= label %></option><% }) %></select></label><label>Planowane przyjęcie<input name="scheduled_for" type="datetime-local"></label><label>Przebieg<input name="mileage_in" type="number" min="0"></label><label>Stan paliwa<select name="fuel_level"><option value="">—</option><option>Rezerwa</option><option>1/4</option><option>1/2</option><option>3/4</option><option>Pełny</option></select></label><label>Domyślny widok cen<select name="price_mode"><option value="net" <%= settings.default_price_mode==='net'?'selected':'' %>>Netto</option><option value="gross" <%= settings.default_price_mode==='gross'?'selected':'' %>>Brutto</option></select></label><label class="span-3">Zgłoszenie klienta<textarea name="complaint" rows="3"></textarea></label><label class="span-3">Notatki wewnętrzne<textarea name="notes" rows="2"></textarea></label></div></div>
     </div>
     <div class="modal-foot"><button class="button" type="button" data-close-modal>Anuluj</button><button class="button primary" type="submit">Utwórz zlecenie</button></div>
   </form>

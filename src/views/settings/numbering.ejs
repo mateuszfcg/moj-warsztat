@@ -1,0 +1,18 @@
+<%- include('../partials/header') %>
+<div class="page-title"><div><h1>Numeracja dokumentów</h1><p>Ustaw osobny wzorzec, prefiks i okres zerowania numeracji dla każdego typu dokumentu.</p></div><div class="actions"><a class="button" href="<%= basePath %>/settings/documents">Edytor dokumentów</a><a class="button" href="<%= basePath %>/settings">Wróć</a></div></div>
+<form class="card" method="post" action="<%= basePath %>/settings/numbering"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
+  <div class="notice"><strong>Dostępne znaczniki:</strong> {PREFIX}, {YYYY}, {YY}, {MM}, {DD}, {N}, {NN}, {NNN}, {NNNN}. Każdy wzorzec musi zawierać licznik {N…}.</div>
+  <% const labels = {work_order:'Zlecenia',invoice:'Faktury VAT',correction:'Korekty faktur',invoice_receipt:'Faktury do paragonu',protocol_intake:'Protokoły przyjęcia',protocol_release:'Protokoły wydania',protocol_additional_costs:'Protokoły dodatkowych kosztów',purchase_wz:'Dokumenty WZ',purchase_pz:'Dokumenty PZ'}; %>
+  <div class="numbering-grid">
+    <% Object.keys(numberingTypes).forEach(type=>{ %>
+      <section class="numbering-card"><h3><%= labels[type]||type %></h3>
+        <label>Wzorzec<input name="number_pattern_<%= type %>" value="<%= formSettings['number_pattern_'+type] %>" required></label>
+        <div class="form-grid"><label>Prefiks<input name="number_prefix_<%= type %>" value="<%= formSettings['number_prefix_'+type] %>"></label><label>Zerowanie<select name="number_reset_<%= type %>"><option value="year" <%= formSettings['number_reset_'+type]==='year'?'selected':'' %>>Co rok</option><option value="month" <%= formSettings['number_reset_'+type]==='month'?'selected':'' %>>Co miesiąc</option><option value="none" <%= formSettings['number_reset_'+type]==='none'?'selected':'' %>>Nigdy</option></select></label></div>
+        <p class="small">Przykład: <strong><%= previews[type] %></strong></p>
+        <label class="checkbox-row warning-line"><input type="checkbox" name="reset_sequence_<%= type %>" value="1"><span>Wyzeruj licznik tego typu przy zapisie</span></label>
+      </section>
+    <% }) %>
+  </div>
+  <div class="form-actions"><button class="button primary" type="submit">Zapisz numerację</button></div>
+</form>
+<%- include('../partials/footer') %>

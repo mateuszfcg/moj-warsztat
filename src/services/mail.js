@@ -15,6 +15,11 @@ function transport() {
   });
 }
 
+async function sendText({ to, subject, text }) {
+  if (!to) throw new Error('Brak adresu e-mail.');
+  return transport().sendMail({ from: config.smtp.from, to, subject, text });
+}
+
 async function sendDocument({ to, subject, text, attachmentPath, filename }) {
   if (!to) throw new Error('Klient nie ma adresu e-mail.');
   return transport().sendMail({
@@ -26,4 +31,4 @@ async function sendDocument({ to, subject, text, attachmentPath, filename }) {
   });
 }
 
-module.exports = { configured, sendDocument };
+module.exports = { configured, sendDocument, sendText };
